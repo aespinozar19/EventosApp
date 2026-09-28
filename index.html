@@ -126,6 +126,24 @@
     .error:empty { display: none; }
 
     .estado { background: #fff; border-radius: 24px; padding: 44px 28px; text-align: center; }
+
+    /* Portada (cuando se abre la página sin código de invitación) */
+    .portada { background: #fff; border-radius: 24px; padding: 40px 28px 32px; text-align: center; }
+    .portada .marca { margin: 0 0 22px; font-weight: 800; font-size: 20px; letter-spacing: -.01em; }
+    .portada .marca span { color: #E0A526; }
+    .portada h1 { margin: 0 0 14px; font: 800 30px/1.15 var(--texto); letter-spacing: -.02em; }
+    .portada .intro { margin: 0 0 26px; opacity: .85; }
+    .portada .acciones { display: grid; gap: 12px; }
+    .portada .btn {
+      display: flex; align-items: center; justify-content: center; min-height: 56px;
+      border-radius: 14px; font: 700 17px var(--texto); text-decoration: none;
+    }
+    .portada .btn.primario { background: var(--tinta); color: #fff; }
+    .portada .btn.secundario { border: 2px solid var(--suave); color: var(--tinta); background: #fff; }
+    .portada .nota {
+      margin: 26px 0 0; padding-top: 20px; border-top: 1px solid var(--suave);
+      font-size: 15px; opacity: .75;
+    }
   </style>
 </head>
 <body>
@@ -143,7 +161,7 @@
   init();
 
   async function init() {
-    if (!codigo) return pintarError('Este enlace no tiene código de invitación. Abre el enlace completo que te enviaron.');
+    if (!codigo) return pintarPortada();
     try {
       D = await api('invitacion', { codigo });
       aplicarTema();
@@ -161,6 +179,23 @@
     s.setProperty('--peso', t.peso);
     cargarFuente(t.gf);
     document.title = D.evento.titulo;
+  }
+
+  // Página de inicio: sin código de invitación, invita a crear un evento o entrar al panel
+  function pintarPortada() {
+    document.title = 'Anfitrión: invitaciones para tus eventos';
+    raiz.innerHTML = `
+      <section class="portada">
+        <p class="marca">Anfitrión<span>.</span></p>
+        <h1>Tus invitados, confirmados sin perseguir a nadie</h1>
+        <p class="intro">Crea tu baby shower, cumpleaños, boda o pollada. Envía cada invitación por WhatsApp
+          y mira en un solo lugar quién viene y qué regalo trae.</p>
+        <div class="acciones">
+          <a class="btn primario" href="app.html#/registro">Quiero crear un evento</a>
+          <a class="btn secundario" href="app.html#/entrar">Ya tengo cuenta, entrar</a>
+        </div>
+        <p class="nota">¿Te invitaron a un evento? Abre el enlace completo que te enviaron por WhatsApp.</p>
+      </section>`;
   }
 
   function pintarError(msg) {
