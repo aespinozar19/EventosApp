@@ -226,6 +226,39 @@
     .aviso.visible { opacity: 1; transform: translate(-50%, 0); }
     .aviso.error { background: var(--no); }
     @media (prefers-reduced-motion: reduce) { .aviso { transition: none; } }
+    /* Acceso: Google + correo */
+    .acceso { display: grid; gap: 16px; max-width: 440px; }
+    .boton-google { min-height: 44px; }
+    .login .divisor { display: flex; align-items: center; gap: 12px; color: var(--suave); font-size: 14px; margin: 0; }
+    .divisor::before, .divisor::after { content: ''; flex: 1; border-top: 1px solid var(--linea); }
+    .form-acceso { display: grid; gap: 14px; }
+    .form-acceso .btn { justify-self: start; }
+    .login .acceso p, .login .form-acceso p { font-size: 14px; margin: 0; }
+    .login .intro { font-size: 18px; margin: 16px 0 28px; }
+    .login .nota { font-size: 15px; margin: 0 0 20px; }
+    .error-login:empty { display: none; }
+    .enlace-suave { color: var(--suave); font-size: 14.5px; font-weight: 600; align-self: center; }
+    .links-acceso { display: flex; gap: 18px; flex-wrap: wrap; }
+    .btn-enlace { background: none; border: 0; padding: 0; font: 600 14.5px var(--texto); color: var(--tinta); text-decoration: underline; cursor: pointer; }
+    .in-codigo { font-size: 24px; letter-spacing: .3em; max-width: 210px; font-weight: 700; }
+
+    /* Eventos compartidos, roles y cuenta */
+    .titulo-lista { margin: 32px 0 12px; }
+    .destacado { margin-bottom: 8px; }
+    .destacado h2 { margin-bottom: 8px; }
+    .destacado .btn { margin-top: 16px; }
+    .rol-evento { margin: 10px 0 0; font-size: 15px; color: var(--suave); }
+    .rol-evento .btn-enlace { margin-left: 6px; color: var(--no); }
+    .fila-form.equipo { grid-template-columns: 2fr 1.3fr auto; }
+    .roles-ayuda dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; }
+    .roles-ayuda dt { font-weight: 700; }
+    .roles-ayuda dd { margin: 0; color: var(--suave); }
+    .metodos { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+    @media (max-width: 720px) {
+      .fila-form.equipo { grid-template-columns: 1fr 1fr; }
+      .roles-ayuda dl { grid-template-columns: 1fr; }
+      .roles-ayuda dd { margin-bottom: 8px; }
+    }
   </style>
 </head>
 <body>
@@ -240,96 +273,301 @@
 <div class="aviso" id="aviso" role="status" aria-live="polite"></div>
 
 <script>
-  const S = { token: null, me: null, query: new URLSearchParams(), refresco: null };
+  const S = {
+    token: null, me: null, query: new URLSearchParams(), refresco: null,
+    gisListo: false, verificando: null, resetEmail: null
+  };
   const vista = document.getElementById('vista');
   const $ = sel => document.querySelector(sel);
+  const CLAVE_SESION = 'anfitrion_sesion';
+
+  const ROLES = {
+    dueno: { nombre: 'Dueño' },
+    admin: { nombre: 'Administrador' },
+    coorganizador: { nombre: 'Coorganizador', desc: 'Hace todo en el evento, menos gestionar el equipo o eliminarlo.' },
+    lectura: { nombre: 'Solo lectura', desc: 'Ve el resumen, los invitados y sus respuestas, sin cambiar nada.' },
+    registrador: { nombre: 'Registrador', desc: 'Agrega invitados y solo ve a los que él mismo registró.' },
+    mensajero: { nombre: 'Mensajero', desc: 'Ve la lista de invitados y envía las invitaciones por WhatsApp.' }
+  };
+  const COMPARTIBLES = ['coorganizador', 'lectura', 'registrador', 'mensajero'];
 
 
-  /* ═════════ Sesión con Google ═════════ */
+  /* ═════════ Sesión ═════════ */
 
-  function leerJwt(t) {
+  function sesionGuardada() {
     try {
-      const b = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b), c => c.charCodeAt(0))));
-    } catch { return null; }
+      const s = JSON.parse(localStorage.getItem(CLAVE_SESION) || 'null');
+      if (s && s.token && s.expira > Date.now() + 60000) return s.token;
+      localStorage.removeItem(CLAVE_SESION);
+    } catch { /* almacenamiento no disponible */ }
+    return null;
   }
 
-  function tokenVigente() {
-    const t = sessionStorage.getItem('idToken');
-    const p = t && leerJwt(t);
-    if (!p || p.exp * 1000 < Date.now() + 60000) { sessionStorage.removeItem('idToken'); return null; }
-    return t;
-  }
-
-  function esperarGoogle() {
-    return new Promise(ok => {
-      const t = setInterval(() => { if (window.google?.accounts?.id) { clearInterval(t); ok(); } }, 50);
-    });
+  function guardarSesion(r) {
+    S.token = r.token;
+    try { localStorage.setItem(CLAVE_SESION, JSON.stringify(r)); } catch { /* la sesión dura hasta cerrar la pestaña */ }
   }
 
   async function llamar(action, data = {}) {
-    if (!tokenVigente()) return sesionVencida('Tu sesión expiró. Vuelve a iniciar sesión.');
+    if (!S.token) return sesionVencida('Inicia sesión para continuar.');
     try {
       return await api(action, data, S.token);
     } catch (e) {
       if (e.codigo === 'AUTH' || e.codigo === 'INACTIVO') return sesionVencida(e.message);
-      if (['SIN_CUENTA', 'PENDIENTE', 'RECHAZADO'].includes(e.codigo) && action !== 'solicitarAcceso') {
-        entrar();
-        e.silencioso = true;
-      }
       throw e;
     }
   }
 
   function sesionVencida(msg) {
-    cerrarSesion(msg);
+    salir(msg, false);
     const e = new Error(msg);
     e.silencioso = true;
     throw e;
   }
 
-  function cerrarSesion(msg = '') {
-    sessionStorage.removeItem('idToken');
-    S.token = null; S.me = null;
+  function salir(msg = '', avisarServidor = true) {
+    if (avisarServidor && S.token) api('cerrarSesion', {}, S.token).catch(() => {});
+    S.token = null;
+    S.me = null;
+    try { localStorage.removeItem(CLAVE_SESION); } catch { /* nada */ }
     detenerRefresco();
     $('#barra').hidden = true;
-    google.accounts.id.disableAutoSelect();
-    vistaLogin(msg);
+    if (S.gisListo) google.accounts.id.disableAutoSelect();
+    if (!/^#\/(entrar|registro|olvide|verificar)/.test(location.hash)) history.replaceState(null, '', '#/entrar');
+    vistaAuth(msg);
   }
 
-  function vistaLogin(msg = '') {
-    const registro = location.hash.startsWith('#/registro');
-    vista.innerHTML = registro ? `
-      <section class="login">
-        <p class="marca-grande">Anfitrión</p>
-        <h1>Solicita tu cuenta de anfitrión</h1>
-        <p>Organiza las confirmaciones y los regalos de tu evento desde un solo lugar.</p>
-        <ol class="pasos-registro">
-          <li>Entra con tu cuenta de Google.</li>
-          <li>Cuéntanos quién eres y qué evento quieres organizar.</li>
-          <li>Revisamos tu solicitud y te avisamos por correo cuando esté aprobada.</li>
-        </ol>
-        <div id="boton-google"></div>
-        ${msg ? `<p class="error-login" role="alert">${esc(msg)}</p>` : ''}
-        <p class="pie-login">¿Ya tienes cuenta? <a href="#/">Entra aquí</a>.</p>
-      </section>` : `
-      <section class="login">
-        <p class="marca-grande">Anfitrión</p>
-        <h1>Tus invitados, confirmados sin perseguir a nadie</h1>
-        <p>Crea tu baby shower, cumpleaños, boda o pollada. Envía cada invitación por WhatsApp y mira en un solo lugar quién viene y qué regalo trae.</p>
-        <div id="boton-google"></div>
-        ${msg ? `<p class="error-login" role="alert">${esc(msg)}</p>` : ''}
-        <p class="pie-login">¿Aún no tienes cuenta? <a href="#/registro">Solicita acceso</a>.</p>
-      </section>`;
-    google.accounts.id.renderButton($('#boton-google'),
-      { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', locale: 'es', width: 300 });
-    if (!msg) google.accounts.id.prompt();
+  $('#salir').addEventListener('click', () => salir());
+
+  function irA(hash) {
+    if (location.hash === hash) router(); else location.hash = hash;
   }
 
-  async function alIniciarSesion(resp) {
-    S.token = resp.credential;
-    sessionStorage.setItem('idToken', S.token);
-    await entrar();
+
+  /* ═════════ Pantallas de acceso ═════════ */
+
+  function rutaAuth() {
+    const m = location.hash.match(/^#\/(registro|olvide|verificar)/);
+    return m ? m[1] : 'entrar';
+  }
+
+  function vistaAuth(msg = '') {
+    const ruta = rutaAuth();
+    if (ruta !== 'olvide') S.resetEmail = null;
+    if (ruta === 'verificar' && S.verificando) return vistaVerificar(msg);
+    if (ruta === 'registro') return vistaRegistro(msg);
+    if (ruta === 'olvide') return vistaOlvide(msg);
+    return vistaEntrar(msg);
+  }
+
+  function marcoAuth(html) {
+    vista.innerHTML = `<section class="login"><p class="marca-grande">Anfitrión</p>${html}</section>`;
+  }
+
+  function errorAuth(msg) {
+    const p = $('#auth-error');
+    if (p) p.textContent = msg || '';
+    return !!p;
+  }
+
+  function bloqueAcceso(formulario) {
+    return `
+      <div class="panel acceso">
+        <div id="boton-google" class="boton-google"></div>
+        <p class="divisor"><span>o con tu correo</span></p>
+        ${formulario}
+        <p class="error-login" id="auth-error" role="alert"></p>
+      </div>`;
+  }
+
+  function pintarBotonGoogle() {
+    const el = $('#boton-google');
+    if (!el || !S.gisListo) return;
+    google.accounts.id.renderButton(el, {
+      theme: 'outline', size: 'large', shape: 'pill', locale: 'es',
+      text: rutaAuth() === 'registro' ? 'signup_with' : 'signin_with',
+      width: Math.max(220, Math.min(380, el.clientWidth || 300))
+    });
+  }
+
+  function campo(id, etiqueta, attrs) {
+    return `<div><label class="campo" for="${id}">${etiqueta}</label><input id="${id}" ${attrs}></div>`;
+  }
+
+  function vistaEntrar(msg) {
+    marcoAuth(`
+      <h1>Tus invitados, confirmados sin perseguir a nadie</h1>
+      <p class="intro">Crea tu baby shower, cumpleaños, boda o pollada. Envía cada invitación por WhatsApp y mira en un solo lugar quién viene y qué regalo trae.</p>
+      ${bloqueAcceso(`
+        <form id="form-entrar" class="form-acceso">
+          ${campo('in-email', 'Correo', 'type="email" autocomplete="email" required')}
+          ${campo('in-pass', 'Contraseña', 'type="password" autocomplete="current-password" required')}
+          <button class="btn primario" id="btn-entrar">Entrar</button>
+          <a class="enlace-suave" href="#/olvide">Olvidé mi contraseña</a>
+        </form>`)}
+      <p class="pie-login">¿No tienes cuenta? <a href="#/registro">Crea una</a>.</p>`);
+    errorAuth(msg);
+    pintarBotonGoogle();
+
+    $('#form-entrar').addEventListener('submit', e => {
+      e.preventDefault();
+      const email = $('#in-email').value.trim();
+      errorAuth('');
+      conBoton($('#btn-entrar'), 'Entrando…', async () => {
+        try {
+          guardarSesion(await api('loginPassword', { email, password: $('#in-pass').value }));
+          await entrar();
+        } catch (err) {
+          if (err.codigo === 'NO_VERIFICADO') { S.verificando = email; return irA('#/verificar'); }
+          errorAuth(err.message);
+        }
+      });
+    });
+  }
+
+  function vistaRegistro(msg) {
+    marcoAuth(`
+      <h1>Crea tu cuenta</h1>
+      <ol class="pasos-registro">
+        <li>Crea tu cuenta con Google o con tu correo.</li>
+        <li>Si vas a organizar, solicita tu cuenta de anfitrión y cuéntanos qué evento es.</li>
+        <li>Te avisamos por correo cuando la aprobemos.</li>
+      </ol>
+      <p class="nota">Si te invitaron a ayudar en un evento, usa el mismo correo al que te llegó la invitación.</p>
+      ${bloqueAcceso(`
+        <form id="form-registro" class="form-acceso">
+          ${campo('rg-nombre', 'Tu nombre', 'autocomplete="name" maxlength="80" required')}
+          ${campo('rg-email', 'Correo', 'type="email" autocomplete="email" required')}
+          ${campo('rg-pass', 'Contraseña', 'type="password" autocomplete="new-password" minlength="8" required')}
+          ${campo('rg-pass2', 'Repite la contraseña', 'type="password" autocomplete="new-password" minlength="8" required')}
+          <p class="ayuda">Mínimo 8 caracteres. Te enviaremos un código para confirmar tu correo.</p>
+          <button class="btn primario" id="btn-registro">Crear cuenta</button>
+        </form>`)}
+      <p class="pie-login">¿Ya tienes cuenta? <a href="#/entrar">Entra aquí</a>.</p>`);
+    errorAuth(msg);
+    pintarBotonGoogle();
+
+    $('#form-registro').addEventListener('submit', e => {
+      e.preventDefault();
+      if ($('#rg-pass').value !== $('#rg-pass2').value) return errorAuth('Las contraseñas no coinciden.');
+      errorAuth('');
+      const email = $('#rg-email').value.trim();
+      conBoton($('#btn-registro'), 'Creando cuenta…', async () => {
+        try {
+          await api('registrarCuenta', { nombre: $('#rg-nombre').value, email, password: $('#rg-pass').value });
+          S.verificando = email;
+          irA('#/verificar');
+        } catch (err) { errorAuth(err.message); }
+      });
+    });
+  }
+
+  function vistaVerificar(msg) {
+    marcoAuth(`
+      <h1>Revisa tu correo</h1>
+      <p class="intro">Te enviamos un código de 6 dígitos a <strong>${esc(S.verificando)}</strong>. Si no lo ves en unos minutos, revisa la carpeta de spam.</p>
+      <div class="panel acceso">
+        <form id="form-codigo" class="form-acceso">
+          ${campo('in-codigo', 'Código', 'class="in-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required')}
+          <button class="btn primario" id="btn-codigo">Confirmar correo</button>
+        </form>
+        <p class="error-login" id="auth-error" role="alert"></p>
+        <div class="links-acceso">
+          <button type="button" class="btn-enlace" id="reenviar">Enviar otro código</button>
+          <button type="button" class="btn-enlace" id="otro-correo">Usar otro correo</button>
+        </div>
+      </div>`);
+    errorAuth(msg);
+    $('#in-codigo').focus();
+
+    $('#form-codigo').addEventListener('submit', e => {
+      e.preventDefault();
+      errorAuth('');
+      conBoton($('#btn-codigo'), 'Confirmando…', async () => {
+        try {
+          guardarSesion(await api('verificarCorreo', { email: S.verificando, codigo: $('#in-codigo').value }));
+          await entrar();
+        } catch (err) { errorAuth(err.message); }
+      });
+    });
+    $('#reenviar').onclick = e => conBoton(e.target, 'Enviando…', async () => {
+      try {
+        await api('reenviarCodigo', { email: S.verificando });
+        errorAuth('');
+        aviso('Te enviamos un código nuevo.');
+      } catch (err) {
+        if (err.codigo === 'YA_VERIFICADO') { S.verificando = null; return irA('#/entrar'); }
+        errorAuth(err.message);
+      }
+    });
+    $('#otro-correo').onclick = () => { S.verificando = null; irA('#/registro'); };
+  }
+
+  function vistaOlvide(msg) {
+    if (!S.resetEmail) {
+      marcoAuth(`
+        <h1>Crea una contraseña nueva</h1>
+        <p class="intro">Escribe el correo de tu cuenta y te enviaremos un código. También sirve si siempre entraste con Google y ahora quieres usar una contraseña.</p>
+        <div class="panel acceso">
+          <form id="form-reset1" class="form-acceso">
+            ${campo('rs-email', 'Correo', 'type="email" autocomplete="email" required')}
+            <button class="btn primario" id="btn-reset1">Enviar código</button>
+          </form>
+          <p class="error-login" id="auth-error" role="alert"></p>
+        </div>
+        <p class="pie-login"><a href="#/entrar">Volver a entrar</a></p>`);
+      errorAuth(msg);
+      $('#form-reset1').addEventListener('submit', e => {
+        e.preventDefault();
+        const email = $('#rs-email').value.trim();
+        conBoton($('#btn-reset1'), 'Enviando…', async () => {
+          try {
+            await api('solicitarReset', { email });
+            S.resetEmail = email;
+            vistaOlvide();
+          } catch (err) { errorAuth(err.message); }
+        });
+      });
+      return;
+    }
+
+    marcoAuth(`
+      <h1>Crea una contraseña nueva</h1>
+      <p class="intro">Si existe una cuenta con <strong>${esc(S.resetEmail)}</strong>, te llegó un código de 6 dígitos. Vence en 15 minutos.</p>
+      <div class="panel acceso">
+        <form id="form-reset2" class="form-acceso">
+          ${campo('rs-codigo', 'Código', 'class="in-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required')}
+          ${campo('rs-pass', 'Contraseña nueva', 'type="password" autocomplete="new-password" minlength="8" required')}
+          ${campo('rs-pass2', 'Repite la contraseña', 'type="password" autocomplete="new-password" minlength="8" required')}
+          <button class="btn primario" id="btn-reset2">Guardar y entrar</button>
+        </form>
+        <p class="error-login" id="auth-error" role="alert"></p>
+        <div class="links-acceso"><button type="button" class="btn-enlace" id="otro-reset">Usar otro correo</button></div>
+      </div>`);
+    errorAuth(msg);
+    $('#rs-codigo').focus();
+    $('#otro-reset').onclick = () => { S.resetEmail = null; vistaOlvide(); };
+    $('#form-reset2').addEventListener('submit', e => {
+      e.preventDefault();
+      if ($('#rs-pass').value !== $('#rs-pass2').value) return errorAuth('Las contraseñas no coinciden.');
+      conBoton($('#btn-reset2'), 'Guardando…', async () => {
+        try {
+          guardarSesion(await api('restablecerPassword',
+            { email: S.resetEmail, codigo: $('#rs-codigo').value, password: $('#rs-pass').value }));
+          await entrar();
+        } catch (err) { errorAuth(err.message); }
+      });
+    });
+  }
+
+  async function alGoogle(resp) {
+    errorAuth('');
+    try {
+      guardarSesion(await api('loginGoogle', { idToken: resp.credential }));
+      await entrar();
+    } catch (err) {
+      if (!errorAuth(err.message)) vistaAuth(err.message);
+    }
   }
 
   async function entrar() {
@@ -337,119 +575,55 @@
     try {
       S.me = await llamar('me');
     } catch (e) {
-      if (!e.silencioso) vistaLogin(e.message);
+      if (e.silencioso) return;
+      vista.innerHTML = `<div class="vacio"><p>${esc(e.message)}</p>
+        <button class="btn" id="reintentar">Reintentar</button> <button class="btn" id="cerrar">Cerrar sesión</button></div>`;
+      $('#reintentar').onclick = entrar;
+      $('#cerrar').onclick = () => salir();
       return;
     }
+    S.verificando = null;
+    S.resetEmail = null;
     $('#barra').hidden = false;
     $('#usuario-nombre').textContent = S.me.nombre;
-
-    if (S.me.estado !== 'aprobado') {
-      $('#nav').innerHTML = '';
-      if (S.me.estado === 'sin_cuenta') return vistaSolicitud();
-      if (S.me.estado === 'pendiente') return vistaEnRevision();
-      if (S.me.estado === 'rechazado') return vistaRechazado();
-      return vistaCuentaInfo('Tu cuenta está suspendida', 'Comunícate con el administrador si crees que es un error.');
-    }
-
     pintarNav();
-    if (location.hash.startsWith('#/registro')) location.hash = '#/';
-    router();
+    if (!location.hash || /^#\/(entrar|registro|olvide|verificar)/.test(location.hash)) irA('#/');
+    else router();
   }
 
   function pintarNav() {
     const n = S.me.solicitudesPendientes || 0;
-    $('#nav').innerHTML = '<a href="#/" data-nav="eventos">Mis eventos</a>' +
+    $('#nav').innerHTML = '<a href="#/" data-nav="eventos">Eventos</a>' +
       (S.me.rol === 'admin'
         ? `<a href="#/admin" data-nav="admin">Administración${n ? `<span class="insignia" aria-label="${n} solicitudes por revisar">${n}</span>` : ''}</a>`
-        : '');
+        : '') +
+      '<a href="#/cuenta" data-nav="cuenta">Mi cuenta</a>';
   }
-
-
-  /* ═════════ Registro de anfitriones ═════════ */
-
-  function vistaSolicitud(nota = '') {
-    vista.innerHTML = `
-      <section class="login">
-        <h1>Solicita tu cuenta de anfitrión</h1>
-        <p>Revisamos cada solicitud a mano. Cuando la aprobemos te escribiremos a ${esc(S.me.email)} y podrás crear tu evento.</p>
-        ${nota}
-        <form id="form-solicitud" class="panel form-solicitud">
-          <p class="quien">Entrarás siempre con <strong>${esc(S.me.email)}</strong>.</p>
-          <div><label class="campo" for="sol-nombre">Tu nombre</label>
-            <input id="sol-nombre" required maxlength="80" value="${esc(S.me.nombre)}"></div>
-          <div><label class="campo" for="sol-tel">Tu WhatsApp</label>
-            <input id="sol-tel" required inputmode="tel" placeholder="999 888 777"></div>
-          <div><label class="campo" for="sol-motivo">¿Qué evento quieres organizar? (opcional)</label>
-            <textarea id="sol-motivo" maxlength="500" placeholder="Un baby shower para unas 60 personas en diciembre"></textarea></div>
-          <div><button class="btn primario" id="sol-enviar">Enviar solicitud</button></div>
-        </form>
-      </section>`;
-
-    $('#form-solicitud').addEventListener('submit', e => {
-      e.preventDefault();
-      conBoton($('#sol-enviar'), 'Enviando…', async () => {
-        try {
-          await llamar('solicitarAcceso', {
-            nombre: $('#sol-nombre').value, telefono: $('#sol-tel').value, motivo: $('#sol-motivo').value
-          });
-          S.me.estado = 'pendiente';
-          S.me.nombre = $('#sol-nombre').value.trim();
-          $('#usuario-nombre').textContent = S.me.nombre;
-          vistaEnRevision(true);
-        } catch (err) {
-          if (err.codigo === 'PENDIENTE') return vistaEnRevision();
-          if (err.codigo === 'YA_APROBADO') return entrar();
-          avisoError(err);
-        }
-      });
-    });
-  }
-
-  function vistaEnRevision(recien = false) {
-    vista.innerHTML = `
-      <section class="login">
-        <span class="estado-cuenta espera">En revisión</span>
-        <h1>${recien ? 'Recibimos tu solicitud' : 'Tu solicitud está en revisión'}</h1>
-        <p>Te escribiremos a ${esc(S.me.email)} cuando tu cuenta esté aprobada. Puedes cerrar esta página.</p>
-        <button class="btn" id="revisar">Revisar de nuevo</button>
-      </section>`;
-    $('#revisar').onclick = e => conBoton(e.target, 'Revisando…', entrar);
-  }
-
-  function vistaRechazado() {
-    vista.innerHTML = `
-      <section class="login">
-        <span class="estado-cuenta no">No aprobada</span>
-        <h1>Tu solicitud no fue aprobada</h1>
-        ${S.me.notaAdmin ? `<p class="nota-admin">${esc(S.me.notaAdmin)}</p>` : ''}
-        <p>Si crees que fue un error o tu situación cambió, puedes enviar una nueva solicitud.</p>
-        <button class="btn primario" id="reintentar">Enviar una nueva solicitud</button>
-      </section>`;
-    $('#reintentar').onclick = () => vistaSolicitud();
-  }
-
-  function vistaCuentaInfo(titulo, texto) {
-    vista.innerHTML = `<section class="login"><h1>${esc(titulo)}</h1><p>${esc(texto)}</p></section>`;
-  }
-
-  $('#salir').addEventListener('click', () => cerrarSesion());
 
   // Cierra los menús "Más opciones" al hacer clic fuera
   document.addEventListener('click', e => {
     document.querySelectorAll('.mas[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); });
   });
 
+  function esperarGoogle() {
+    return new Promise(ok => {
+      const t = setInterval(() => { if (window.google?.accounts?.id) { clearInterval(t); ok(); } }, 50);
+    });
+  }
+
   (async function arrancar() {
+    window.addEventListener('hashchange', router);
+    S.token = sesionGuardada();
+    if (S.token) entrar(); else vistaAuth();
+
     await esperarGoogle();
     google.accounts.id.initialize({
       client_id: APP_CONFIG.GOOGLE_CLIENT_ID,
-      callback: alIniciarSesion,
-      auto_select: true,
+      callback: alGoogle,
       use_fedcm_for_prompt: true
     });
-    S.token = tokenVigente();
-    if (S.token) await entrar(); else vistaLogin();
-    window.addEventListener('hashchange', router);
+    S.gisListo = true;
+    pintarBotonGoogle();
   })();
 
 
@@ -457,23 +631,26 @@
 
   function router() {
     if (!S.me) {
-      if (!S.token && window.google?.accounts?.id) vistaLogin();
+      if (!S.token) vistaAuth();
       return;
     }
-    if (S.me.estado !== 'aprobado') return;
     detenerRefresco();
     const [camino, qs] = location.hash.replace(/^#\/?/, '').split('?');
     const partes = camino.split('/').filter(Boolean);
     S.query = new URLSearchParams(qs || '');
 
+    if (['entrar', 'registro', 'olvide', 'verificar'].includes(partes[0])) return irA('#/');
+
+    const seccion = partes[0] === 'admin' ? 'admin' : partes[0] === 'cuenta' ? 'cuenta' : 'eventos';
     document.querySelectorAll('#nav a').forEach(a => {
-      const activo = (a.dataset.nav === 'admin') === (partes[0] === 'admin');
-      if (activo) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+      if (a.dataset.nav === seccion) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
 
     if (partes[0] === 'admin' && S.me.rol === 'admin') return ejecutar(vistaAdmin);
+    if (partes[0] === 'cuenta') return ejecutar(vistaCuenta);
+    if (partes[0] === 'solicitud') return ejecutar(vistaSolicitud);
     if (partes[0] === 'nuevo') return ejecutar(vistaNuevo);
-    if (partes[0] === 'evento' && partes[1]) return ejecutar(() => vistaEvento(partes[1], partes[2] || 'resumen'));
+    if (partes[0] === 'evento' && partes[1]) return ejecutar(() => vistaEvento(partes[1], partes[2]));
     return ejecutar(vistaMisEventos);
   }
 
@@ -483,7 +660,7 @@
     } catch (e) {
       if (e.silencioso) return;
       vista.innerHTML = `<div class="vacio"><p>${esc(e.message)}</p>
-        <button class="btn" onclick="router()">Reintentar</button> <a class="btn" href="#/">Ir a mis eventos</a></div>`;
+        <button class="btn" onclick="router()">Reintentar</button> <a class="btn" href="#/">Ir a tus eventos</a></div>`;
     }
   }
 
@@ -535,72 +712,179 @@
     return d ? Math.round(n * 100 / d) : 0;
   }
 
+  function nombreRol(rol) {
+    return (ROLES[rol] || { nombre: rol }).nombre;
+  }
 
-  /* ═════════ Mis eventos ═════════ */
+
+  /* ═════════ Eventos ═════════ */
+
+  function panelAnfitrion(r) {
+    if (r.estado === 'pendiente') {
+      return `<section class="panel destacado">
+        <span class="estado-cuenta espera">En revisión</span>
+        <h2>Tu solicitud de anfitrión está en revisión</h2>
+        <p>Te escribiremos a ${esc(S.me.email)} cuando esté aprobada y podrás crear tus eventos.</p>
+      </section>`;
+    }
+    if (r.estado === 'rechazado') {
+      return `<section class="panel destacado">
+        <span class="estado-cuenta no">No aprobada</span>
+        <h2>Tu solicitud de anfitrión no fue aprobada</h2>
+        ${S.me.notaAdmin ? `<p class="nota-admin">${esc(S.me.notaAdmin)}</p>` : ''}
+        <p>Si tu situación cambió, puedes enviar una nueva solicitud.</p>
+        <a class="btn primario" href="#/solicitud">Enviar una nueva solicitud</a>
+      </section>`;
+    }
+    return `<section class="panel destacado">
+      <h2>¿Vas a organizar un evento?</h2>
+      <p>Para crear tus propios eventos necesitas una cuenta de anfitrión. Cuéntanos qué quieres organizar y te avisaremos por correo cuando la aprobemos.</p>
+      <a class="btn primario" href="#/solicitud">Solicitar cuenta de anfitrión</a>
+    </section>`;
+  }
 
   async function vistaMisEventos() {
     const ruta = location.hash;
     vista.innerHTML = '<p class="cargando">Cargando tus eventos…</p>';
     const r = await llamar('misEventos');
     if (ruta !== location.hash) return;
+    S.me.estado = r.estado;
 
-    const libres = r.cuotaEventos - r.eventos.length;
-    const cupoTexto = `Usaste ${r.eventos.length} de ${r.cuotaEventos} ${r.cuotaEventos === 1 ? 'evento disponible' : 'eventos disponibles'}.`;
+    const aprobado = r.estado === 'aprobado';
+    const cupo = aprobado
+      ? `<p>Usaste ${r.propios.length} de ${r.cuotaEventos} ${r.cuotaEventos === 1 ? 'evento disponible' : 'eventos disponibles'}.</p>`
+      : '';
+    const accion = !aprobado ? ''
+      : r.puedeCrear ? '<a class="btn primario" href="#/nuevo">Crear evento</a>'
+      : '<p class="aviso-cupo">Llegaste a tu límite. Pide al administrador que amplíe tu cupo.</p>';
+
+    let listas = '';
+    if (r.propios.length) {
+      listas += `<h2 class="titulo-lista">Organizas</h2><ul class="eventos">${r.propios.map(tarjetaEvento).join('')}</ul>`;
+    }
+    if (r.compartidos.length) {
+      listas += `<h2 class="titulo-lista">Compartidos contigo</h2><ul class="eventos">${r.compartidos.map(tarjetaEvento).join('')}</ul>`;
+    }
+    if (!listas && aprobado) {
+      listas = '<div class="vacio"><p>Todavía no tienes eventos. Crea el primero para empezar a invitar.</p></div>';
+    }
 
     vista.innerHTML = `
-      <div class="encabezado">
-        <div><h1>Tus eventos</h1><p>${cupoTexto}</p></div>
-        ${libres > 0
-          ? '<a class="btn primario" href="#/nuevo">Crear evento</a>'
-          : '<p class="aviso-cupo">Llegaste a tu límite. Pide al administrador que amplíe tu cupo.</p>'}
-      </div>
-      ${r.eventos.length
-        ? `<ul class="eventos">${r.eventos.map(tarjetaEvento).join('')}</ul>`
-        : '<div class="vacio"><p>Todavía no tienes eventos. Crea el primero para empezar a invitar.</p></div>'}`;
+      <div class="encabezado"><div><h1>Tus eventos</h1>${cupo}</div>${accion}</div>
+      ${aprobado ? '' : panelAnfitrion(r)}
+      ${listas}`;
   }
 
   function tarjetaEvento(e) {
     const t = tipoEvento(e.tipo);
+    const compartido = e.rol !== 'dueno';
+    const conteo = e.totalInvitaciones == null ? ''
+      : `<span class="evento-conteo"><strong>${e.confirmados}</strong> de ${e.totalInvitaciones} confirmaron</span>`;
     return `
       <li><a class="evento" href="#/evento/${esc(e.id)}" style="--tono:${t.tema.acento}">
         <span class="evento-emoji" aria-hidden="true">${t.emoji}</span>
         <span>
-          <span class="evento-tipo">${esc(t.nombre)}${e.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
+          <span class="evento-tipo">${esc(t.nombre)}${compartido ? ', tu rol: ' + esc(nombreRol(e.rol)) : ''}${e.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
           <span class="evento-titulo">${esc(e.titulo)}</span>
           <span class="evento-meta">${cap(fechaLarga(e.fecha))}, ${esc(e.lugar)}</span>
         </span>
-        <span class="evento-conteo"><strong>${e.confirmados}</strong> de ${e.totalInvitaciones} confirmaron</span>
+        ${conteo}
       </a></li>`;
   }
 
+  async function vistaSolicitud() {
+    if (S.me.estado === 'aprobado' || S.me.estado === 'pendiente') return irA('#/');
+    vista.innerHTML = `
+      <a class="volver" href="#/">Volver a tus eventos</a>
+      <section class="login" style="margin-top:0">
+        <h1>Solicita tu cuenta de anfitrión</h1>
+        <p class="intro">Revisamos cada solicitud a mano. Cuando la aprobemos te escribiremos a ${esc(S.me.email)} y podrás crear tu evento.</p>
+        <form id="form-solicitud" class="panel form-acceso">
+          ${campo('sol-nombre', 'Tu nombre', `required maxlength="80" value="${esc(S.me.nombre)}"`)}
+          ${campo('sol-tel', 'Tu WhatsApp', 'required inputmode="tel" placeholder="999 888 777"')}
+          <div><label class="campo" for="sol-motivo">¿Qué evento quieres organizar? (opcional)</label>
+            <textarea id="sol-motivo" maxlength="500" placeholder="Un baby shower para unas 60 personas en diciembre"></textarea></div>
+          <button class="btn primario" id="sol-enviar">Enviar solicitud</button>
+        </form>
+      </section>`;
 
-  /* ═════════ Evento ═════════ */
+    $('#form-solicitud').addEventListener('submit', e => {
+      e.preventDefault();
+      conBoton($('#sol-enviar'), 'Enviando…', async () => {
+        try {
+          await llamar('solicitarAcceso', {
+            nombre: $('#sol-nombre').value, telefono: $('#sol-tel').value, motivo: $('#sol-motivo').value
+          });
+          S.me.estado = 'pendiente';
+          S.me.nombre = $('#sol-nombre').value.trim();
+          $('#usuario-nombre').textContent = S.me.nombre;
+          aviso('Solicitud enviada. Te avisaremos por correo.');
+          irA('#/');
+        } catch (err) {
+          if (err.codigo === 'PENDIENTE' || err.codigo === 'YA_APROBADO') return entrar();
+          avisoError(err);
+        }
+      });
+    });
+  }
 
   async function vistaNuevo() {
+    if (S.me.estado !== 'aprobado') return irA('#/');
     vista.innerHTML = `<a class="volver" href="#/">Volver a tus eventos</a>
       <div class="encabezado"><h1>Nuevo evento</h1></div><div id="seccion"></div>`;
     formEvento($('#seccion'), null);
   }
 
-  async function vistaEvento(id, seccion) {
+  function pestanasPara(ev) {
+    const p = x => ev.permisos.includes(x);
+    return [
+      ['resumen', 'Resumen', p('ver_resumen')],
+      ['invitados', 'Invitados', p('ver_invitados') || p('ver_invitados_propios')],
+      ['regalos', 'Regalos', p('ver_resumen') || p('regalos')],
+      ['equipo', 'Equipo', p('equipo')],
+      ['ajustes', 'Ajustes', p('editar_evento')]
+    ].filter(t => t[2]);
+  }
+
+  async function vistaEvento(id, pedida) {
     const ruta = location.hash;
     vista.innerHTML = '<p class="cargando">Cargando evento…</p>';
+    pedida = pedida || 'resumen';
 
-    const extra = { invitados: 'listarInvitados', regalos: 'listarRegalos' }[seccion];
-    const [res, datos] = await Promise.all([
-      llamar('resumen', { eventoId: id }),
-      extra ? llamar(extra, { eventoId: id }) : null
+    // Se piden en paralelo el evento (con tus permisos) y los datos de la pestaña
+    const accion = { resumen: 'resumen', invitados: 'listarInvitados', regalos: 'listarRegalos', equipo: 'listarEquipo' }[pedida];
+    const [ev, datos] = await Promise.all([
+      llamar('evento', { eventoId: id }),
+      accion ? llamar(accion, { eventoId: id }).catch(err => ({ __error: err })) : null
     ]);
     if (ruta !== location.hash) return;
 
-    vista.innerHTML = cabeceraEvento(res.evento, seccion) + '<div id="seccion"></div>';
-    const cont = $('#seccion');
+    const pestanas = pestanasPara(ev);
+    if (!pestanas.some(t => t[0] === pedida)) {
+      location.replace('#/evento/' + ev.id + '/' + pestanas[0][0]);
+      return;
+    }
+    if (datos && datos.__error) throw datos.__error;
 
-    if (seccion === 'invitados') seccionInvitados(cont, res.evento, datos);
-    else if (seccion === 'regalos') seccionRegalos(cont, res.evento, datos);
-    else if (seccion === 'ajustes') formEvento(cont, res.evento);
+    vista.innerHTML = cabeceraEvento(ev, pedida, pestanas) + '<div id="seccion"></div>';
+    $('#salir-evento')?.addEventListener('click', e => {
+      if (!confirm(`¿Salir del equipo de "${ev.titulo}"? Dejarás de verlo hasta que te vuelvan a invitar.`)) return;
+      conBoton(e.target, 'Saliendo…', async () => {
+        try {
+          await llamar('salirDeEvento', { eventoId: ev.id });
+          aviso('Saliste del evento.');
+          irA('#/');
+        } catch (err) { avisoError(err); }
+      });
+    });
+
+    const cont = $('#seccion');
+    if (pedida === 'invitados') seccionInvitados(cont, ev, datos);
+    else if (pedida === 'regalos') seccionRegalos(cont, ev, datos);
+    else if (pedida === 'equipo') seccionEquipo(cont, ev, datos);
+    else if (pedida === 'ajustes') formEvento(cont, ev);
     else {
-      seccionResumen(cont, res);
+      seccionResumen(cont, datos);
       S.refresco = setInterval(async () => {
         if (ruta !== location.hash || document.hidden) return;
         try { seccionResumen(cont, await llamar('resumen', { eventoId: id })); } catch { /* reintenta en el siguiente ciclo */ }
@@ -608,16 +892,22 @@
     }
   }
 
-  function cabeceraEvento(ev, sec) {
+  function cabeceraEvento(ev, sec, pestanas) {
     const t = tipoEvento(ev.tipo);
-    const pestanas = [['resumen', 'Resumen'], ['invitados', 'Invitados'], ['regalos', 'Regalos'], ['ajustes', 'Ajustes']];
-    const ajeno = ev.ownerEmail !== S.me.email ? ` Evento de ${esc(ev.ownerEmail)}.` : '';
+    let rol = '';
+    if (ev.rol === 'admin') {
+      rol = `<p class="rol-evento">Evento de ${esc(ev.ownerEmail)}. Lo ves como administrador.</p>`;
+    } else if (ev.rol !== 'dueno') {
+      rol = `<p class="rol-evento">Tu rol: <strong>${esc(nombreRol(ev.rol))}</strong>. ${esc(ROLES[ev.rol]?.desc || '')}
+        <button class="btn-enlace" id="salir-evento">Salir de este evento</button></p>`;
+    }
     return `
       <a class="volver" href="#/">Volver a tus eventos</a>
       <div class="cabecera-evento" style="--tono:${t.tema.acento}">
         <span class="evento-tipo">${t.emoji} ${esc(t.nombre)}${ev.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
         <h1>${esc(ev.titulo)}</h1>
-        <p class="evento-meta">${cap(fechaLarga(ev.fecha))} a las ${horaCorta(ev.hora)}, ${esc(ev.lugar)}.${ajeno}</p>
+        <p class="evento-meta">${cap(fechaLarga(ev.fecha))} a las ${horaCorta(ev.hora)}, ${esc(ev.lugar)}.</p>
+        ${rol}
       </div>
       <nav class="pestanas" aria-label="Secciones del evento">
         ${pestanas.map(([k, l]) => `<a href="#/evento/${esc(ev.id)}/${k}" ${k === sec ? 'aria-current="page"' : ''}>${l}</a>`).join('')}
@@ -625,18 +915,20 @@
   }
 
 
-  /* ── Resumen (dashboard del dueño) ── */
+  /* ── Resumen ── */
 
   function seccionResumen(cont, r) {
     const tipos = r.evento.tiposPermitidos;
     const vienen = r.adultos + r.ninos + r.mascotas;
     const porEnviar = r.invitaciones - r.enviadas;
+    const verInvitados = r.evento.permisos.includes('ver_invitados');
 
     const regalos = r.regalos.length
       ? `<ul class="regalos-resumen">${r.regalos.map(g => `
           <li><div class="fila"><span>${esc(g.nombre)}</span><span class="nota">${g.reservados} de ${g.cupo}</span></div>
           <div class="progreso ${g.reservados >= g.cupo ? 'lleno' : ''}"><span style="width:${pct(g.reservados, g.cupo)}%"></span></div></li>`).join('')}</ul>`
-      : `<p class="nota">Aún no agregaste regalos. <a href="#/evento/${esc(r.evento.id)}/regalos">Agregar regalos</a></p>`;
+      : `<p class="nota">Aún no hay regalos en la lista.${r.evento.permisos.includes('regalos')
+          ? ` <a href="#/evento/${esc(r.evento.id)}/regalos">Agregar regalos</a>` : ''}</p>`;
 
     cont.innerHTML = `
       <div class="rejilla-resumen">
@@ -663,29 +955,29 @@
           <h2>Envíos</h2>
           <p>${r.enviadas} de ${r.invitaciones} invitaciones enviadas.</p>
           <div class="progreso ${porEnviar === 0 && r.invitaciones ? 'lleno' : ''}"><span style="width:${pct(r.enviadas, r.invitaciones)}%"></span></div>
-          ${porEnviar > 0 ? `<a class="btn chico" href="#/evento/${esc(r.evento.id)}/invitados?f=porEnviar">Ver las ${porEnviar} por enviar</a>` : ''}
+          ${porEnviar > 0 && verInvitados ? `<a class="btn chico" href="#/evento/${esc(r.evento.id)}/invitados?f=porEnviar">Ver las ${porEnviar} por enviar</a>` : ''}
         </section>
       </div>
       <section class="panel"><h2>Regalos</h2>${regalos}</section>
       <div class="acciones-pie">
         <button class="btn" id="btn-actualizar">Actualizar</button>
-        <button class="btn" id="btn-csv">Descargar lista en CSV</button>
+        ${verInvitados ? '<button class="btn" id="btn-csv">Descargar lista en CSV</button>' : ''}
         <span class="nota">Se actualiza solo cada minuto.</span>
       </div>`;
 
     $('#btn-actualizar').onclick = e => conBoton(e.target, 'Actualizando…', async () => {
       try { seccionResumen(cont, await llamar('resumen', { eventoId: r.evento.id })); } catch (err) { avisoError(err); }
     });
-    $('#btn-csv').onclick = e => conBoton(e.target, 'Preparando…', async () => {
+    $('#btn-csv')?.addEventListener('click', e => conBoton(e.target, 'Preparando…', async () => {
       try { descargarCsv(r.evento, await llamar('listarInvitados', { eventoId: r.evento.id })); } catch (err) { avisoError(err); }
-    });
+    }));
   }
 
   function descargarCsv(ev, lista) {
     const celda = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-    const filas = [['Nombre', 'WhatsApp', 'Máximo', 'Enviado', 'Estado', 'Adultos', 'Niños', 'Mascotas', 'Regalo', 'Respondió', 'Enlace']]
+    const filas = [['Nombre', 'WhatsApp', 'Máximo', 'Enviado', 'Estado', 'Adultos', 'Niños', 'Mascotas', 'Regalo', 'Respondió', 'Registrado por', 'Enlace']]
       .concat(lista.map(i => [i.nombre, i.whatsapp, i.maxPersonas, i.enviado ? 'Sí' : 'No', i.estado,
-        i.adultos, i.ninos, i.mascotas, i.regaloNombre, i.fechaRespuesta, linkInvitacion(i.codigo)]));
+        i.adultos, i.ninos, i.mascotas, i.regaloNombre, i.fechaRespuesta, i.creadoPor || ev.ownerEmail, linkInvitacion(i.codigo)]));
     const csv = '\uFEFF' + filas.map(f => f.map(celda).join(',')).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -706,9 +998,11 @@
   };
 
   function seccionInvitados(cont, ev, lista) {
+    const puede = x => ev.permisos.includes(x);
     const st = { lista, filtro: FILTROS[S.query.get('f')] ? S.query.get('f') : 'todos', q: '', editando: null };
 
     cont.innerHTML = `
+      ${puede('editar_invitados') ? `
       <section class="panel">
         <h2 id="form-inv-titulo">Agregar invitado</h2>
         <form id="form-inv" class="fila-form">
@@ -727,7 +1021,8 @@
           <textarea id="imp-texto" placeholder="Familia Pérez, 999888777, 4&#10;Tía Rosa, 987654321, 2"></textarea>
           <button class="btn" id="imp-btn" type="button">Importar lista</button>
         </details>
-      </section>
+      </section>` : ''}
+      ${!puede('ver_invitados') ? '<p class="nota" style="margin-top:20px">Solo ves a los invitados que tú registraste.</p>' : ''}
       <div class="herramientas" style="margin-top:24px">
         <input type="search" id="buscar" placeholder="Buscar por nombre o número" aria-label="Buscar invitados">
         <div class="filtros" id="filtros" role="group" aria-label="Filtrar invitados"></div>
@@ -737,12 +1032,26 @@
     const tipos = ev.tiposPermitidos;
 
     function fila(i) {
-      const wa = linkWhatsApp(i.whatsapp, armarMensaje(ev, i));
       let estado;
       if (i.estado === 'Confirmado') estado = `<span class="chip ok">Viene: ${esc(detallePersonas(i, tipos))}</span>`;
       else if (i.estado === 'No asistirá') estado = '<span class="chip no">No asistirá</span>';
       else if (i.enviado) estado = '<span class="chip espera">Esperando respuesta</span>';
       else estado = '<span class="chip neutro">Sin enviar</span>';
+
+      let acciones = '';
+      if (puede('enviar')) {
+        const wa = linkWhatsApp(i.whatsapp, armarMensaje(ev, i));
+        acciones += (wa ? `<a class="btn chico wa" href="${esc(wa)}" target="_blank" rel="noopener">Enviar por WhatsApp</a>` : '') +
+          '<button class="btn chico" data-accion="copiar">Copiar mensaje</button>' +
+          `<button class="btn chico ${i.enviado ? 'hecho' : ''}" data-accion="enviado" aria-pressed="${i.enviado}">${i.enviado ? 'Enviado ✓' : 'Marcar como enviado'}</button>`;
+      }
+      const menu = [
+        puede('editar_invitados') && '<button data-accion="editar">Editar</button>',
+        (puede('enviar') || puede('editar_invitados')) && '<button data-accion="link">Copiar solo el enlace</button>',
+        puede('editar_evento') && i.estado !== 'Pendiente' && '<button data-accion="reiniciar">Borrar su respuesta</button>',
+        puede('eliminar_invitados') && '<button data-accion="eliminar" class="peligro">Eliminar invitado</button>'
+      ].filter(Boolean).join('');
+      if (menu) acciones += `<details class="mas"><summary class="btn chico">Más opciones</summary><div class="menu">${menu}</div></details>`;
 
       return `
         <li data-id="${esc(i.id)}">
@@ -752,19 +1061,7 @@
             ${i.regaloNombre ? `<span class="item-sub">Regalo: ${esc(i.regaloNombre)}</span>` : ''}
           </div>
           <div>${estado}</div>
-          <div class="item-acciones">
-            ${wa ? `<a class="btn chico wa" href="${esc(wa)}" target="_blank" rel="noopener">Enviar por WhatsApp</a>` : ''}
-            <button class="btn chico" data-accion="copiar">Copiar mensaje</button>
-            <button class="btn chico ${i.enviado ? 'hecho' : ''}" data-accion="enviado" aria-pressed="${i.enviado}">${i.enviado ? 'Enviado ✓' : 'Marcar como enviado'}</button>
-            <details class="mas"><summary class="btn chico">Más opciones</summary>
-              <div class="menu">
-                <button data-accion="editar">Editar</button>
-                <button data-accion="link">Copiar solo el enlace</button>
-                ${i.estado !== 'Pendiente' ? '<button data-accion="reiniciar">Borrar su respuesta</button>' : ''}
-                <button data-accion="eliminar" class="peligro">Eliminar invitado</button>
-              </div>
-            </details>
-          </div>
+          ${acciones ? `<div class="item-acciones">${acciones}</div>` : ''}
         </li>`;
     }
 
@@ -773,14 +1070,15 @@
         `<button class="filtro" data-filtro="${k}" aria-pressed="${st.filtro === k}">${nombre}<b>${st.lista.filter(fn).length}</b></button>`).join('');
 
       const q = st.q.toLowerCase();
+      const digitos = q.replace(/\D/g, '');
       const visibles = st.lista.filter(FILTROS[st.filtro][1])
-        .filter(i => !q || i.nombre.toLowerCase().includes(q) || i.whatsapp.includes(q.replace(/\D/g, '') || '\u0000'));
+        .filter(i => !q || i.nombre.toLowerCase().includes(q) || (digitos && i.whatsapp.includes(digitos)));
 
       $('#lista-inv').innerHTML = visibles.length
         ? visibles.map(fila).join('')
-        : `<li><p class="nota" style="margin:0">${st.lista.length
-            ? 'Nadie coincide con este filtro.'
-            : 'Agrega a tu primer invitado arriba, o importa tu lista completa desde Excel.'}</p></li>`;
+        : `<li><p class="nota" style="margin:0">${st.lista.length ? 'Nadie coincide con este filtro.'
+            : puede('editar_invitados') ? 'Agrega a tu primer invitado arriba, o importa tu lista completa desde Excel.'
+            : 'Todavía no hay invitados.'}</p></li>`;
     }
 
     function limpiarForm() {
@@ -808,44 +1106,46 @@
       st.lista = st.lista.map(x => x.id === nuevo.id ? nuevo : x);
     }
 
-    $('#form-inv').addEventListener('submit', e => {
-      e.preventDefault();
-      const editando = st.editando;
-      conBoton($('#inv-guardar'), 'Guardando…', async () => {
-        try {
-          const r = await llamar('guardarInvitado', {
-            eventoId: ev.id, id: editando?.id,
-            nombre: $('#inv-nombre').value, whatsapp: $('#inv-wa').value, maxPersonas: $('#inv-max').value
-          });
-          if (editando) reemplazar(r); else st.lista.unshift(r);
-          limpiarForm();
-          pintarLista();
-          aviso(editando ? 'Cambios guardados.' : r.nombre + ' agregado.');
-          $('#inv-nombre').focus();
-        } catch (err) { avisoError(err); }
+    if (puede('editar_invitados')) {
+      $('#form-inv').addEventListener('submit', e => {
+        e.preventDefault();
+        const editando = st.editando;
+        conBoton($('#inv-guardar'), 'Guardando…', async () => {
+          try {
+            const r = await llamar('guardarInvitado', {
+              eventoId: ev.id, id: editando?.id,
+              nombre: $('#inv-nombre').value, whatsapp: $('#inv-wa').value, maxPersonas: $('#inv-max').value
+            });
+            if (editando) reemplazar(r); else st.lista.unshift(r);
+            limpiarForm();
+            pintarLista();
+            aviso(editando ? 'Cambios guardados.' : r.nombre + ' agregado.');
+            $('#inv-nombre').focus();
+          } catch (err) { avisoError(err); }
+        });
       });
-    });
 
-    $('#inv-cancelar').onclick = limpiarForm;
+      $('#inv-cancelar').onclick = limpiarForm;
 
-    $('#imp-btn').onclick = e => {
-      const filas = $('#imp-texto').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
-        .map(l => (l.includes('\t') ? l.split('\t') : l.split(/[,;]/)).map(s => s.trim()))
-        .filter((p, k) => !(k === 0 && p[0].toLowerCase() === 'nombre'))
-        .map(p => ({ nombre: p[0], whatsapp: p[1] || '', maxPersonas: p[2] || '' }));
-      if (!filas.length) return aviso('Pega al menos una fila.', 'error');
+      $('#imp-btn').onclick = e => {
+        const filas = $('#imp-texto').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+          .map(l => (l.includes('\t') ? l.split('\t') : l.split(/[,;]/)).map(s => s.trim()))
+          .filter((p, k) => !(k === 0 && p[0].toLowerCase() === 'nombre'))
+          .map(p => ({ nombre: p[0], whatsapp: p[1] || '', maxPersonas: p[2] || '' }));
+        if (!filas.length) return aviso('Pega al menos una fila.', 'error');
 
-      conBoton(e.target, 'Importando…', async () => {
-        try {
-          const r = await llamar('importarInvitados', { eventoId: ev.id, filas });
-          st.lista = await llamar('listarInvitados', { eventoId: ev.id });
-          $('#imp-texto').value = '';
-          e.target.closest('details').open = false;
-          pintarLista();
-          aviso(r.importados + ' invitados importados.');
-        } catch (err) { avisoError(err); }
-      });
-    };
+        conBoton(e.target, 'Importando…', async () => {
+          try {
+            const r = await llamar('importarInvitados', { eventoId: ev.id, filas });
+            st.lista = await llamar('listarInvitados', { eventoId: ev.id });
+            $('#imp-texto').value = '';
+            e.target.closest('details').open = false;
+            pintarLista();
+            aviso(r.importados + ' invitados importados.');
+          } catch (err) { avisoError(err); }
+        });
+      };
+    }
 
     $('#buscar').addEventListener('input', e => { st.q = e.target.value.trim(); pintarLista(); });
 
@@ -855,8 +1155,7 @@
 
       const btn = e.target.closest('[data-accion]');
       if (!btn) return;
-      const li = btn.closest('li[data-id]');
-      const inv = st.lista.find(x => x.id === li?.dataset.id);
+      const inv = st.lista.find(x => x.id === btn.closest('li[data-id]')?.dataset.id);
       if (!inv) return;
       btn.closest('details')?.removeAttribute('open');
 
@@ -910,9 +1209,11 @@
   /* ── Regalos ── */
 
   function seccionRegalos(cont, ev, lista) {
+    const edita = ev.permisos.includes('regalos');
     const st = { lista, editando: null };
 
     cont.innerHTML = `
+      ${edita ? `
       <section class="panel">
         <h2 id="form-reg-titulo">Agregar regalo</h2>
         <form id="form-reg" class="fila-form corta">
@@ -924,7 +1225,7 @@
             <button type="button" class="btn" id="reg-cancelar" hidden>Cancelar</button></div>
         </form>
         <p class="ayuda">Cada invitado puede elegir un regalo al responder. "Cuántos" indica cuántas personas pueden elegir el mismo; cuando se completa, deja de aparecer en la invitación.</p>
-      </section>
+      </section>` : ''}
       <ul class="lista" id="lista-reg" style="margin-top:20px"></ul>`;
 
     function pintar() {
@@ -935,64 +1236,156 @@
             <span class="item-sub">${r.reservados} de ${r.cupo} reservados${r.reservadoPor.length ? ': ' + esc(listaNatural(r.reservadoPor)) : ''}</span>
             <div class="progreso ${r.reservados >= r.cupo ? 'lleno' : ''}" style="max-width:320px;margin:8px 0 0"><span style="width:${pct(r.reservados, r.cupo)}%"></span></div>
           </div>
-          <div class="item-acciones" style="grid-column:auto">
+          ${edita ? `<div class="item-acciones" style="grid-column:auto">
             <button class="btn chico" data-accion="editar">Editar</button>
             <button class="btn chico peligro" data-accion="eliminar" ${r.reservados ? 'disabled title="Ya tiene reservas"' : ''}>Eliminar</button>
-          </div>
+          </div>` : ''}
         </li>`).join('')
-        : '<li><p class="nota" style="margin:0">Todavía no hay regalos. Agrega los que te gustaría recibir.</p></li>';
+        : `<li><p class="nota" style="margin:0">${edita ? 'Todavía no hay regalos. Agrega los que te gustaría recibir.' : 'Todavía no hay regalos en la lista.'}</p></li>`;
     }
 
-    function limpiar() {
-      st.editando = null;
-      $('#form-reg').reset();
-      $('#form-reg-titulo').textContent = 'Agregar regalo';
-      $('#reg-guardar').textContent = 'Agregar';
-      $('#reg-cancelar').hidden = true;
+    if (edita) {
+      const limpiarForm = () => {
+        st.editando = null;
+        $('#form-reg').reset();
+        $('#form-reg-titulo').textContent = 'Agregar regalo';
+        $('#reg-guardar').textContent = 'Agregar';
+        $('#reg-cancelar').hidden = true;
+      };
+
+      $('#form-reg').addEventListener('submit', e => {
+        e.preventDefault();
+        const editando = st.editando;
+        conBoton($('#reg-guardar'), 'Guardando…', async () => {
+          try {
+            const r = await llamar('guardarRegalo', {
+              eventoId: ev.id, id: editando?.id, nombre: $('#reg-nombre').value, cupo: $('#reg-cupo').value
+            });
+            st.lista = editando ? st.lista.map(x => x.id === r.id ? r : x) : st.lista.concat(r);
+            limpiarForm();
+            pintar();
+            aviso(editando ? 'Regalo actualizado.' : 'Regalo agregado.');
+          } catch (err) { avisoError(err); }
+        });
+      });
+
+      $('#reg-cancelar').onclick = limpiarForm;
+
+      cont.addEventListener('click', async e => {
+        const btn = e.target.closest('[data-accion]');
+        if (!btn) return;
+        const r = st.lista.find(x => x.id === btn.closest('li')?.dataset.id);
+        if (!r) return;
+
+        if (btn.dataset.accion === 'editar') {
+          st.editando = r;
+          $('#reg-nombre').value = r.nombre;
+          $('#reg-cupo').value = r.cupo;
+          $('#form-reg-titulo').textContent = 'Editar regalo';
+          $('#reg-guardar').textContent = 'Guardar cambios';
+          $('#reg-cancelar').hidden = false;
+          $('#reg-nombre').focus();
+        }
+        if (btn.dataset.accion === 'eliminar') {
+          if (!confirm(`¿Eliminar "${r.nombre}" de la lista?`)) return;
+          try {
+            await llamar('eliminarRegalo', { eventoId: ev.id, id: r.id });
+            st.lista = st.lista.filter(x => x !== r);
+            pintar();
+            aviso('Regalo eliminado.');
+          } catch (err) { avisoError(err); }
+        }
+      });
     }
 
-    $('#form-reg').addEventListener('submit', e => {
+    pintar();
+  }
+
+
+  /* ── Equipo ── */
+
+  function seccionEquipo(cont, ev, datos) {
+    const st = { colaboradores: datos.colaboradores };
+    const opcionesRol = actual => COMPARTIBLES.map(r =>
+      `<option value="${r}" ${r === actual ? 'selected' : ''}>${ROLES[r].nombre}</option>`).join('');
+
+    cont.innerHTML = `
+      <section class="panel">
+        <h2>Invitar a alguien al equipo</h2>
+        <form id="form-equipo" class="fila-form equipo">
+          <div class="c-nombre"><label class="campo" for="eq-email">Correo</label>
+            <input id="eq-email" type="email" required placeholder="primo@gmail.com"></div>
+          <div><label class="campo" for="eq-rol">Rol</label>
+            <select id="eq-rol">${opcionesRol('coorganizador')}</select></div>
+          <div class="c-btn"><button class="btn primario" id="eq-invitar">Invitar</button></div>
+        </form>
+        <p class="ayuda" id="eq-desc"></p>
+        <p class="ayuda">Le enviaremos un correo. Debe entrar con ese mismo correo, con Google o creando una contraseña. No necesita cuenta de anfitrión.</p>
+      </section>
+      <ul class="lista" id="lista-equipo" style="margin-top:20px"></ul>
+      <section class="panel roles-ayuda">
+        <h2>Qué puede hacer cada rol</h2>
+        <dl>${COMPARTIBLES.map(r => `<dt>${ROLES[r].nombre}</dt><dd>${ROLES[r].desc}</dd>`).join('')}</dl>
+      </section>`;
+
+    const pintarDesc = () => { $('#eq-desc').textContent = ROLES[$('#eq-rol').value].desc; };
+    $('#eq-rol').addEventListener('change', pintarDesc);
+    pintarDesc();
+
+    function pintar() {
+      $('#lista-equipo').innerHTML = `
+        <li>
+          <div class="item-info"><strong>${esc(datos.dueno.nombre || datos.dueno.email)}</strong>
+            <span class="item-sub">${esc(datos.dueno.email)}</span></div>
+          <div><span class="chip neutro">Dueño</span></div>
+        </li>` + st.colaboradores.map(c => `
+        <li data-id="${esc(c.id)}">
+          <div class="item-info"><strong>${esc(c.nombre || c.email)}</strong>
+            <span class="item-sub">${esc(c.email)}${c.tieneCuenta ? '' : '. Aún no crea su cuenta.'}</span></div>
+          <div class="item-acciones" style="grid-column:auto">
+            <select class="sel-rol" aria-label="Rol de ${esc(c.nombre || c.email)}">${opcionesRol(c.rol)}</select>
+            <button class="btn chico peligro" data-accion="quitar">Quitar</button>
+          </div>
+        </li>`).join('');
+    }
+
+    $('#form-equipo').addEventListener('submit', e => {
       e.preventDefault();
-      const editando = st.editando;
-      conBoton($('#reg-guardar'), 'Guardando…', async () => {
+      conBoton($('#eq-invitar'), 'Invitando…', async () => {
         try {
-          const r = await llamar('guardarRegalo', {
-            eventoId: ev.id, id: editando?.id, nombre: $('#reg-nombre').value, cupo: $('#reg-cupo').value
-          });
-          st.lista = editando ? st.lista.map(x => x.id === r.id ? r : x) : st.lista.concat(r);
-          limpiar();
+          const c = await llamar('invitarColaborador', { eventoId: ev.id, email: $('#eq-email').value, rol: $('#eq-rol').value });
+          st.colaboradores.push(c);
+          $('#eq-email').value = '';
           pintar();
-          aviso(editando ? 'Regalo actualizado.' : 'Regalo agregado.');
+          aviso('Le enviamos un correo a ' + c.email + '.');
         } catch (err) { avisoError(err); }
       });
     });
 
-    $('#reg-cancelar').onclick = limpiar;
+    cont.addEventListener('change', async e => {
+      if (!e.target.classList.contains('sel-rol')) return;
+      const c = st.colaboradores.find(x => x.id === e.target.closest('li').dataset.id);
+      const anterior = c.rol;
+      try {
+        Object.assign(c, await llamar('cambiarRolColaborador', { eventoId: ev.id, id: c.id, rol: e.target.value }));
+        aviso('Ahora ' + (c.nombre || c.email) + ' es ' + nombreRol(c.rol) + '.');
+      } catch (err) {
+        e.target.value = anterior;
+        avisoError(err);
+      }
+    });
 
     cont.addEventListener('click', async e => {
-      const btn = e.target.closest('[data-accion]');
+      const btn = e.target.closest('[data-accion="quitar"]');
       if (!btn) return;
-      const r = st.lista.find(x => x.id === btn.closest('li')?.dataset.id);
-      if (!r) return;
-
-      if (btn.dataset.accion === 'editar') {
-        st.editando = r;
-        $('#reg-nombre').value = r.nombre;
-        $('#reg-cupo').value = r.cupo;
-        $('#form-reg-titulo').textContent = 'Editar regalo';
-        $('#reg-guardar').textContent = 'Guardar cambios';
-        $('#reg-cancelar').hidden = false;
-        $('#reg-nombre').focus();
-      }
-      if (btn.dataset.accion === 'eliminar') {
-        if (!confirm(`¿Eliminar "${r.nombre}" de la lista?`)) return;
-        try {
-          await llamar('eliminarRegalo', { eventoId: ev.id, id: r.id });
-          st.lista = st.lista.filter(x => x !== r);
-          pintar();
-          aviso('Regalo eliminado.');
-        } catch (err) { avisoError(err); }
-      }
+      const c = st.colaboradores.find(x => x.id === btn.closest('li').dataset.id);
+      if (!confirm(`¿Quitar a ${c.nombre || c.email} del equipo? Dejará de ver el evento.`)) return;
+      try {
+        await llamar('quitarColaborador', { eventoId: ev.id, id: c.id });
+        st.colaboradores = st.colaboradores.filter(x => x !== c);
+        pintar();
+        aviso('Quitado del equipo.');
+      } catch (err) { avisoError(err); }
     });
 
     pintar();
@@ -1008,7 +1401,7 @@
       linkMaps: '', fechaLimite: '', tiposPermitidos: ['adultos', 'ninos'], maxPersonasDefault: 2,
       mensajeInvitacion: MENSAJE_DEFAULT, estado: 'activo'
     };
-    const campo = (id, etiqueta, attrs, clase = '') => `
+    const campoEv = (id, etiqueta, attrs, clase = '') => `
       <div class="${clase}"><label class="campo" for="ev-${id}">${etiqueta}</label>
       <input id="ev-${id}" ${attrs} value="${esc(v[id])}"></div>`;
 
@@ -1026,14 +1419,14 @@
         <fieldset>
           <legend>Datos del evento</legend>
           <div class="rejilla">
-            ${campo('titulo', 'Título', 'required maxlength="80" placeholder="Baby shower de Sofía"', 'ancho')}
-            ${campo('anfitriones', 'Anfitriones', 'maxlength="120" placeholder="Diego y Sofía"', 'ancho')}
-            ${campo('fecha', 'Fecha', 'type="date" required')}
-            ${campo('hora', 'Hora', 'type="time" required')}
-            ${campo('fechaLimite', 'Confirmar hasta', 'type="date"')}
-            ${campo('lugar', 'Lugar', 'required maxlength="120" placeholder="Casa de la abuela"')}
-            ${campo('direccion', 'Dirección', 'maxlength="200" placeholder="Av. Primavera 123, Surco"')}
-            ${campo('linkMaps', 'Enlace de Google Maps', 'type="url" maxlength="500" placeholder="https://maps.app.goo.gl/…"')}
+            ${campoEv('titulo', 'Título', 'required maxlength="80" placeholder="Baby shower de Sofía"', 'ancho')}
+            ${campoEv('anfitriones', 'Anfitriones', 'maxlength="120" placeholder="Diego y Sofía"', 'ancho')}
+            ${campoEv('fecha', 'Fecha', 'type="date" required')}
+            ${campoEv('hora', 'Hora', 'type="time" required')}
+            ${campoEv('fechaLimite', 'Confirmar hasta', 'type="date"')}
+            ${campoEv('lugar', 'Lugar', 'required maxlength="120" placeholder="Casa de la abuela"')}
+            ${campoEv('direccion', 'Dirección', 'maxlength="200" placeholder="Av. Primavera 123, Surco"')}
+            ${campoEv('linkMaps', 'Enlace de Google Maps', 'type="url" maxlength="500" placeholder="https://maps.app.goo.gl/…"')}
           </div>
         </fieldset>
 
@@ -1059,7 +1452,8 @@
 
         <div class="acciones-form">
           <button class="btn primario" id="ev-guardar">${nuevo ? 'Crear evento' : 'Guardar cambios'}</button>
-          ${nuevo ? '<a class="btn" href="#/">Cancelar</a>' : '<button type="button" class="btn peligro" id="ev-eliminar">Eliminar evento</button>'}
+          ${nuevo ? '<a class="btn" href="#/">Cancelar</a>'
+            : ev.permisos.includes('eliminar_evento') ? '<button type="button" class="btn peligro" id="ev-eliminar">Eliminar evento</button>' : ''}
         </div>
       </form>`;
 
@@ -1102,12 +1496,57 @@
     });
 
     $('#ev-eliminar')?.addEventListener('click', e => {
-      if (!confirm(`¿Eliminar "${ev.titulo}"? También se borrarán todos sus invitados, respuestas y regalos. Esto no se puede deshacer.`)) return;
+      if (!confirm(`¿Eliminar "${ev.titulo}"? También se borrarán sus invitados, respuestas, regalos y equipo. Esto no se puede deshacer.`)) return;
       conBoton(e.target, 'Eliminando…', async () => {
         try {
           await llamar('eliminarEvento', { id: ev.id });
           aviso('Evento eliminado.');
           location.hash = '#/';
+        } catch (err) { avisoError(err); }
+      });
+    });
+  }
+
+
+  /* ═════════ Mi cuenta ═════════ */
+
+  async function vistaCuenta() {
+    const m = S.me;
+    const estadoTexto = {
+      aprobado: 'Anfitrión aprobado', pendiente: 'Solicitud de anfitrión en revisión',
+      rechazado: 'Solicitud de anfitrión no aprobada', registrado: 'Sin cuenta de anfitrión'
+    }[m.estado] || m.estado;
+
+    vista.innerHTML = `
+      <div class="encabezado"><div><h1>Mi cuenta</h1><p>${esc(m.email)}</p></div></div>
+      <section class="panel">
+        <h2>Cómo entras</h2>
+        <ul class="metodos">
+          <li><strong>Google:</strong> ${m.googleVinculado ? 'vinculado' : 'aún no. Puedes entrar con el botón de Google usando este mismo correo y quedará vinculado.'}</li>
+          <li><strong>Contraseña:</strong> ${m.tienePassword ? 'definida' : 'aún no tienes una'}</li>
+          <li><strong>Estado:</strong> ${esc(estadoTexto)}${m.rol === 'admin' ? ', administrador de la plataforma' : ''}</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>${m.tienePassword ? 'Cambiar contraseña' : 'Crear una contraseña'}</h2>
+        <form id="form-pass" class="form-acceso" style="max-width:420px">
+          ${m.tienePassword ? campo('pw-actual', 'Contraseña actual', 'type="password" autocomplete="current-password" required') : ''}
+          ${campo('pw-nueva', 'Contraseña nueva', 'type="password" autocomplete="new-password" minlength="8" required')}
+          ${campo('pw-nueva2', 'Repite la contraseña nueva', 'type="password" autocomplete="new-password" minlength="8" required')}
+          <p class="ayuda">${m.tienePassword ? 'Se cerrará tu sesión en los demás dispositivos.' : 'Así podrás entrar también con tu correo y contraseña.'}</p>
+          <button class="btn primario" id="pw-guardar">${m.tienePassword ? 'Cambiar contraseña' : 'Crear contraseña'}</button>
+        </form>
+      </section>`;
+
+    $('#form-pass').addEventListener('submit', e => {
+      e.preventDefault();
+      if ($('#pw-nueva').value !== $('#pw-nueva2').value) return aviso('Las contraseñas nuevas no coinciden.', 'error');
+      conBoton($('#pw-guardar'), 'Guardando…', async () => {
+        try {
+          await llamar('cambiarPassword', { actual: $('#pw-actual')?.value || '', nueva: $('#pw-nueva').value });
+          aviso(m.tienePassword ? 'Contraseña cambiada.' : 'Contraseña creada.');
+          m.tienePassword = true;
+          vistaCuenta();
         } catch (err) { avisoError(err); }
       });
     });
@@ -1128,13 +1567,17 @@
     pintarNav();
     document.querySelector('#nav a[data-nav="admin"]')?.setAttribute('aria-current', 'page');
 
-    const estadoChip = u => u.estado === 'rechazado'
-      ? '<span class="chip no">Rechazado</span>'
-      : (u.activo ? '<span class="chip ok">Aprobado</span>' : '<span class="chip neutro">Suspendido</span>');
+    const estadoChip = u => {
+      if (!u.activo) return '<span class="chip neutro">Suspendido</span>';
+      if (u.estado === 'rechazado') return '<span class="chip no">Rechazado</span>';
+      if (u.estado === 'registrado') return '<span class="chip neutro">Sin solicitud</span>';
+      return '<span class="chip ok">Anfitrión</span>';
+    };
+    const metodos = u => [u.googleVinculado && 'Google', u.tienePassword && 'contraseña'].filter(Boolean).join(' y ') || 'sin verificar';
 
     vista.innerHTML = `<div id="admin">
       <div class="encabezado"><div><h1>Administración</h1>
-        <p>${usuarios.length} ${usuarios.length === 1 ? 'anfitrión' : 'anfitriones'}, ${pendientes.length} ${pendientes.length === 1 ? 'solicitud por revisar' : 'solicitudes por revisar'} y ${eventos.length} ${eventos.length === 1 ? 'evento' : 'eventos'}.</p></div></div>
+        <p>${usuarios.length} ${usuarios.length === 1 ? 'usuario' : 'usuarios'}, ${pendientes.length} ${pendientes.length === 1 ? 'solicitud por revisar' : 'solicitudes por revisar'} y ${eventos.length} ${eventos.length === 1 ? 'evento' : 'eventos'}.</p></div></div>
 
       <section class="panel">
         <h2>Solicitudes por revisar</h2>
@@ -1157,21 +1600,21 @@
       </section>
 
       <section class="panel">
-        <h2>Anfitriones</h2>
+        <h2>Usuarios</h2>
         <div class="tabla-scroll"><table class="tabla">
-          <thead><tr><th>Usuario</th><th>Estado</th><th>Rol</th><th>Eventos creados</th><th>Cupo de eventos</th><th>Activo</th><th>Último acceso</th><th></th></tr></thead>
+          <thead><tr><th>Usuario</th><th>Estado</th><th>Entra con</th><th>Eventos creados</th><th>Cupo de eventos</th><th>Activo</th><th>Último acceso</th><th></th></tr></thead>
           <tbody>${usuarios.map(u => `
             <tr data-email="${esc(u.email)}">
-              <td><strong>${esc(u.nombre)}</strong><span class="item-sub">${esc(u.email)}</span></td>
+              <td><strong>${esc(u.nombre)}</strong><span class="item-sub">${esc(u.email)}${u.rol === 'admin' ? ', admin' : ''}</span></td>
               <td>${estadoChip(u)}</td>
-              <td>${u.rol === 'admin' ? 'Admin' : 'Organizador'}</td>
+              <td class="nota">${metodos(u)}</td>
               <td>${u.eventosUsados}</td>
               <td><input type="number" min="0" max="100" class="in-cuota" value="${u.cuotaEventos}" aria-label="Cupo de eventos de ${esc(u.nombre)}"></td>
-              <td><input type="checkbox" class="in-activo" ${u.activo ? 'checked' : ''} ${u.email === S.me.email || u.estado === 'rechazado' ? 'disabled' : ''} aria-label="Cuenta activa de ${esc(u.nombre)}"></td>
+              <td><input type="checkbox" class="in-activo" ${u.activo ? 'checked' : ''} ${u.email === S.me.email ? 'disabled' : ''} aria-label="Cuenta activa de ${esc(u.nombre)}"></td>
               <td class="nota">${esc(u.ultimoAcceso)}</td>
-              <td>${u.estado === 'rechazado'
-                ? '<button class="btn chico" data-accion="aprobar">Aprobar</button>'
-                : '<button class="btn chico" data-accion="guardar">Guardar</button>'}</td>
+              <td>${u.estado === 'aprobado' || u.email === S.me.email
+                ? '<button class="btn chico" data-accion="guardar">Guardar</button>'
+                : '<button class="btn chico" data-accion="guardar">Guardar</button> <button class="btn chico" data-accion="aprobar">Hacer anfitrión</button>'}</td>
             </tr>`).join('')}</tbody>
         </table></div>
       </section>
