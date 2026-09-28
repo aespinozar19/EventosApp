@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invitación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="comun.js"></script>
+
+  <style>
+    :root {
+      --fondo: #F0EFF7; --tinta: #23213A; --acento: #5B4FC7; --suave: #DDDAF1;
+      --display: 'Public Sans', Georgia, serif; --peso: 700;
+      --texto: 'Public Sans', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      min-height: 100vh;
+      background: var(--fondo);
+      color: var(--tinta);
+      font: 17px/1.55 var(--texto);
+      display: flex;
+      justify-content: center;
+      padding: 28px 14px 56px;
+    }
+    .invitacion { width: 100%; max-width: 500px; }
+
+    .frente {
+      background: #fff;
+      border-radius: 24px 24px 0 0;
+      padding: 44px 28px 30px;
+      text-align: center;
+    }
+    .tipo { margin: 0 0 14px; color: var(--acento); font-weight: 700; font-size: 15px; }
+    .titulo {
+      margin: 0;
+      font-family: var(--display);
+      font-weight: var(--peso);
+      font-size: clamp(40px, 12vw, 60px);
+      line-height: 1;
+      overflow-wrap: anywhere;
+    }
+    .anfitriones { margin: 16px 0 0; font-size: 19px; }
+
+    .datos { margin-top: 32px; display: grid; gap: 16px; text-align: left; }
+    .dato { display: grid; grid-template-columns: 30px 1fr; gap: 10px; }
+    .dato > span { font-size: 21px; line-height: 1.3; }
+    .dato a { color: var(--acento); font-weight: 700; }
+
+    /* El talón: línea punteada con muescas a los lados */
+    .corte {
+      height: 30px;
+      position: relative;
+      background:
+        radial-gradient(circle at 0 50%, var(--fondo) 14px, transparent 15px),
+        radial-gradient(circle at 100% 50%, var(--fondo) 14px, transparent 15px),
+        #fff;
+    }
+    .corte::after {
+      content: '';
+      position: absolute;
+      left: 26px; right: 26px; top: 50%;
+      border-top: 2px dashed var(--suave);
+    }
+    .talon {
+      background: #fff;
+      border-radius: 0 0 24px 24px;
+      padding: 22px 28px 34px;
+    }
+
+    .saludo { margin: 0; font-size: 24px; line-height: 1.2; }
+    .nota { margin: 8px 0 0; opacity: .8; font-size: 15.5px; }
+    .talon p { margin: 10px 0 0; }
+
+    fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+    .oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+    .opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 22px; }
+    .opcion { position: relative; }
+    .opcion input { position: absolute; opacity: 0; pointer-events: none; }
+    .opcion span {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 58px; padding: 10px;
+      border: 2px solid var(--suave); border-radius: 14px;
+      font-weight: 700; text-align: center; cursor: pointer;
+    }
+    .opcion input:checked + span { background: var(--acento); border-color: var(--acento); color: #fff; }
+    .opcion input:focus-visible + span { outline: 3px solid var(--tinta); outline-offset: 2px; }
+
+    .pregunta { display: block; margin: 26px 0 8px; font-weight: 700; }
+    .contador {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--suave);
+    }
+    .pasos { display: flex; align-items: center; gap: 14px; }
+    .pasos button {
+      width: 44px; height: 44px; border-radius: 50%;
+      border: 2px solid var(--acento); background: #fff; color: var(--acento);
+      font-size: 24px; line-height: 1; font-weight: 700; cursor: pointer;
+    }
+    .pasos button:disabled { opacity: .3; cursor: default; }
+    .pasos output { min-width: 26px; text-align: center; font-size: 21px; font-weight: 700; }
+    .cupo { font-size: 15px; opacity: .8; }
+
+    select {
+      width: 100%; min-height: 54px; padding: 12px 14px;
+      font: 17px var(--texto); color: var(--tinta);
+      border: 2px solid var(--suave); border-radius: 14px; background: #fff;
+    }
+    select:focus { outline: none; border-color: var(--acento); }
+
+    .enviar {
+      width: 100%; min-height: 58px; margin-top: 28px;
+      border: 0; border-radius: 14px;
+      background: var(--tinta); color: #fff;
+      font: 700 18px var(--texto); cursor: pointer;
+    }
+    .enviar:disabled { opacity: .35; cursor: default; }
+    :focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
+
+    .error { color: #A42A2A; font-weight: 600; min-height: 0; }
+    .error:empty { display: none; }
+
+    .estado { background: #fff; border-radius: 24px; padding: 44px 28px; text-align: center; }
+  </style>
+</head>
+<body>
+
+<main class="invitacion" id="invitacion">
+  <div class="estado"><p>Abriendo tu invitación…</p></div>
+</main>
+
+<script>
+  const codigo = (new URLSearchParams(location.search).get('codigo') || '').trim();
+  const raiz = document.getElementById('invitacion');
+  let D = null;
+  const form = { asiste: null, cant: { adultos: 1, ninos: 0, mascotas: 0 }, regaloId: '' };
+
+  init();
+
+  async function init() {
+    if (!codigo) return pintarError('Este enlace no tiene código de invitación. Abre el enlace completo que te enviaron.');
+    try {
+      D = await api('invitacion', { codigo });
+      aplicarTema();
+      pintar();
+    } catch (e) {
+      pintarError(e.message);
+    }
+  }
+
+  function aplicarTema() {
+    const t = tipoEvento(D.evento.tipo);
+    const s = document.documentElement.style;
+    Object.entries(t.tema).forEach(([k, v]) => s.setProperty('--' + k, v));
+    s.setProperty('--display', `'${t.fuente}', Georgia, serif`);
+    s.setProperty('--peso', t.peso);
+    cargarFuente(t.gf);
+    document.title = D.evento.titulo;
+  }
+
+  function pintarError(msg) {
+    raiz.innerHTML = `<div class="estado"><p>${esc(msg)}</p></div>`;
+  }
+
+  function pintar() {
+    raiz.innerHTML = frente() + '<div class="corte" aria-hidden="true"></div><section class="talon" id="talon"></section>';
+    pintarTalon();
+  }
+
+  function frente() {
+    const ev = D.evento, t = tipoEvento(ev.tipo);
+    return `
+      <section class="frente">
+        <p class="tipo">${t.emoji} ${esc(t.etiqueta)}</p>
+        <h1 class="titulo">${esc(ev.titulo)}</h1>
+        ${ev.anfitriones ? `<p class="anfitriones">${esc(ev.anfitriones)}</p>` : ''}
+        <div class="datos">
+          <div class="dato"><span aria-hidden="true">📅</span>
+            <div><strong>${cap(fechaLarga(ev.fecha))}</strong><br>${horaCorta(ev.hora)}</div></div>
+          <div class="dato"><span aria-hidden="true">📍</span>
+            <div><strong>${esc(ev.lugar)}</strong>
+              ${ev.direccion ? '<br>' + esc(ev.direccion) : ''}
+              ${ev.linkMaps ? `<br><a href="${esc(ev.linkMaps)}" target="_blank" rel="noopener">Ver en el mapa</a>` : ''}
+            </div></div>
+          ${ev.fechaLimite ? `<div class="dato"><span aria-hidden="true">⏳</span>
+            <div>Confirma hasta el ${fechaLarga(ev.fechaLimite)}</div></div>` : ''}
+        </div>
+      </section>`;
+  }
+
+  function pintarTalon(recien = false) {
+    const talon = document.getElementById('talon');
+    const inv = D.invitado;
+    if (inv.estado !== 'Pendiente') talon.innerHTML = resumen(recien);
+    else if (!D.abierta) talon.innerHTML = cerrado();
+    else talon.innerHTML = formulario();
+  }
+
+  function contacto() {
+    return D.evento.anfitriones ? esc(D.evento.anfitriones) : 'los anfitriones';
+  }
+
+  function cerrado() {
+    return `<h2 class="saludo">Hola, ${esc(D.invitado.nombre)}</h2>
+      <p>Las confirmaciones para este evento ya están cerradas. Si aún quieres responder, comunícate con ${contacto()}.</p>`;
+  }
+
+  function resumen(recien) {
+    const inv = D.invitado, vino = inv.estado === 'Confirmado';
+    const titulo = recien ? (vino ? '¡Te esperamos!' : 'Gracias por avisarnos') : 'Hola, ' + esc(inv.nombre);
+    return `<h2 class="saludo">${titulo}</h2>
+      <p>${vino ? 'Confirmaste asistencia para ' + esc(detallePersonas(inv, D.evento.tiposPermitidos)) + '.'
+                : 'Registramos que no podrás asistir.'}</p>
+      ${inv.regalo ? `<p>Regalo elegido: <strong>${esc(inv.regalo)}</strong></p>` : ''}
+      <p class="nota">Si necesitas cambiar tu respuesta, comunícate con ${contacto()}.</p>`;
+  }
+
+  function total() {
+    return D.evento.tiposPermitidos.reduce((s, t) => s + form.cant[t], 0);
+  }
+
+  function formulario() {
+    const inv = D.invitado;
+    return `
+      <h2 class="saludo">Hola, ${esc(inv.nombre)}</h2>
+      <p class="nota">Tu invitación es para ${inv.maxPersonas === 1 ? '1 persona' : 'hasta ' + inv.maxPersonas + ' personas'}.</p>
+
+      <fieldset class="opciones">
+        <legend class="oculto">¿Asistirás?</legend>
+        <label class="opcion"><input type="radio" name="asiste" value="si" ${form.asiste === true ? 'checked' : ''}><span>Sí, asistiré</span></label>
+        <label class="opcion"><input type="radio" name="asiste" value="no" ${form.asiste === false ? 'checked' : ''}><span>No podré ir</span></label>
+      </fieldset>
+
+      ${form.asiste === true ? bloquePersonas() : ''}
+      ${form.asiste !== null && D.regalos.length ? bloqueRegalo() : ''}
+
+      <p class="error" id="error" role="alert"></p>
+      <button class="enviar" id="enviar" ${form.asiste === null ? 'disabled' : ''}>
+        ${form.asiste === false ? 'Enviar respuesta' : 'Confirmar asistencia'}
+      </button>`;
+  }
+
+  function bloquePersonas() {
+    const perm = D.evento.tiposPermitidos, max = D.invitado.maxPersonas, t = total();
+    if (max === 1 && perm.length === 1) return '';
+    const filas = perm.map(tipo => {
+      const info = TIPOS_INVITADO[tipo], min = tipo === 'adultos' ? 1 : 0;
+      const etiqueta = tipo === 'adultos' ? 'Adultos, contándote' : cap(info.plural);
+      return `
+        <div class="contador">
+          <span>${etiqueta}</span>
+          <div class="pasos">
+            <button type="button" data-tipo="${tipo}" data-delta="-1" aria-label="Quitar ${info.singular}" ${form.cant[tipo] <= min ? 'disabled' : ''}>−</button>
+            <output aria-live="polite">${form.cant[tipo]}</output>
+            <button type="button" data-tipo="${tipo}" data-delta="1" aria-label="Agregar ${info.singular}" ${t >= max ? 'disabled' : ''}>+</button>
+          </div>
+        </div>`;
+    }).join('');
+    return `<div><span class="pregunta">¿Quiénes vienen?</span>${filas}
+      <p class="cupo">${t} de ${max} lugares usados</p></div>`;
+  }
+
+  function bloqueRegalo() {
+    const texto = form.asiste
+      ? '¿Quieres llevar alguno de estos regalos? (opcional)'
+      : 'Aunque no puedas venir, puedes enviar un regalo (opcional)';
+    return `<label class="pregunta" for="regalo">${texto}</label>
+      <select id="regalo">
+        <option value="">Aún no decido</option>
+        ${D.regalos.map(r => `<option value="${esc(r.id)}" ${r.id === form.regaloId ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}
+      </select>`;
+  }
+
+  raiz.addEventListener('change', e => {
+    if (e.target.name === 'asiste') {
+      form.asiste = e.target.value === 'si';
+      pintarTalon();
+      document.querySelector('input[name="asiste"]:checked')?.focus();
+    }
+    if (e.target.id === 'regalo') form.regaloId = e.target.value;
+  });
+
+  raiz.addEventListener('click', e => {
+    const b = e.target.closest('button[data-delta]');
+    if (b) {
+      const { tipo, delta } = b.dataset;
+      form.cant[tipo] += Number(delta);
+      pintarTalon();
+      const mismo = document.querySelector(`button[data-tipo="${tipo}"][data-delta="${delta}"]`);
+      (mismo && !mismo.disabled ? mismo : document.querySelector(`button[data-tipo="${tipo}"]:not(:disabled)`))?.focus();
+      return;
+    }
+    if (e.target.closest('#enviar')) enviar();
+  });
+
+  async function enviar() {
+    const btn = document.getElementById('enviar');
+    const datos = { codigo, asiste: form.asiste, regaloId: form.regaloId, adultos: 0, ninos: 0, mascotas: 0 };
+    if (form.asiste) D.evento.tiposPermitidos.forEach(t => { datos[t] = form.cant[t]; });
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando…';
+
+    try {
+      await api('responder', datos);
+      Object.assign(D.invitado, {
+        estado: form.asiste ? 'Confirmado' : 'No asistirá',
+        adultos: datos.adultos, ninos: datos.ninos, mascotas: datos.mascotas,
+        regalo: (D.regalos.find(r => r.id === form.regaloId) || {}).nombre || ''
+      });
+      pintarTalon(true);
+      document.getElementById('talon').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      try {
+        if (e.codigo === 'REGALO_LLENO' || e.codigo === 'RESPONDIDA' || e.codigo === 'CERRADO') {
+          D = await api('invitacion', { codigo });
+          form.regaloId = '';
+        }
+      } catch { /* se muestra el error original */ }
+      pintarTalon();
+      const err = document.getElementById('error');
+      if (err) err.textContent = e.message;
+    }
+  }
+</script>
+
+</body>
+</html>

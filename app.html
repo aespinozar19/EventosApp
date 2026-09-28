@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anfitrión: panel de eventos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="comun.js"></script>
+
+  <style>
+    :root {
+      --fondo: #EDF0EB; --superficie: #FFFFFF; --tinta: #1F2A44; --suave: #5E6679; --linea: #D3D9CF;
+      --acento: #E0A526;
+      --ok: #2F7A55; --ok-suave: #DCEEE3;
+      --no: #A23B3B; --no-suave: #F4DEDE;
+      --espera: #75590F; --espera-suave: #F6EBC9;
+      --display: 'Bricolage Grotesque', system-ui, sans-serif;
+      --texto: 'Public Sans', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--fondo); color: var(--tinta); font: 16px/1.5 var(--texto); }
+    h1, h2 { font-family: var(--display); line-height: 1.1; margin: 0; }
+    h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 800; letter-spacing: -.015em; }
+    h2 { font-size: 20px; font-weight: 600; margin-bottom: 14px; }
+    a { color: inherit; }
+    :focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
+    [hidden] { display: none !important; }
+
+    /* Barra superior */
+    .barra { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 12px 24px; background: var(--tinta); color: #fff; }
+    .marca { font-family: var(--display); font-weight: 800; font-size: 22px; text-decoration: none; color: #fff; }
+    .marca::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 3px; border-radius: 50%; background: var(--acento); }
+    .barra nav { display: flex; gap: 4px; flex: 1; }
+    .barra nav a { color: #C9D0E0; text-decoration: none; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 15px; }
+    .barra nav a[aria-current="page"] { background: rgba(255,255,255,.13); color: #fff; }
+    .usuario { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #C9D0E0; }
+    .btn-texto { background: none; border: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; padding: 4px; }
+
+    .vista { max-width: 1000px; margin: 0 auto; padding: 32px 20px 90px; }
+
+    /* Controles */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      min-height: 42px; padding: 0 16px; border-radius: 10px;
+      border: 1.5px solid var(--linea); background: var(--superficie); color: var(--tinta);
+      font: 600 15px var(--texto); text-decoration: none; cursor: pointer; white-space: nowrap;
+    }
+    .btn:hover { border-color: var(--tinta); }
+    .btn.primario { background: var(--tinta); border-color: var(--tinta); color: #fff; }
+    .btn.primario:hover { background: #2E3C5E; }
+    .btn.peligro { color: var(--no); border-color: #E3BDBD; }
+    .btn.wa { background: #1B8E4A; border-color: #1B8E4A; color: #fff; }
+    .btn.hecho { background: var(--ok-suave); border-color: var(--ok-suave); color: var(--ok); }
+    .btn.chico { min-height: 34px; padding: 0 12px; font-size: 14px; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    input, select, textarea {
+      width: 100%; min-height: 44px; padding: 10px 12px;
+      border: 1.5px solid var(--linea); border-radius: 10px;
+      background: #fff; color: var(--tinta); font: 16px var(--texto);
+    }
+    textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--tinta); }
+    input[type="checkbox"], input[type="radio"] { width: auto; min-height: 0; }
+    .campo { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+    .ayuda { font-size: 13.5px; color: var(--suave); margin: 6px 0 0; }
+    fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+    legend { font-family: var(--display); font-weight: 600; font-size: 19px; padding: 0; margin-bottom: 12px; }
+
+    .panel { background: var(--superficie); border: 1px solid var(--linea); border-radius: 16px; padding: 24px; }
+    .panel + .panel, .panel + .herramientas { margin-top: 20px; }
+    .encabezado { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+    .encabezado p { margin: 8px 0 0; color: var(--suave); }
+    .cargando, .vacio { padding: 48px 20px; text-align: center; color: var(--suave); }
+    .vacio { background: var(--superficie); border: 1.5px dashed var(--linea); border-radius: 16px; }
+
+    /* Login */
+    .login { max-width: 560px; margin: 8vh auto 0; }
+    .login .marca-grande { font-family: var(--display); font-weight: 800; font-size: 20px; margin: 0 0 40px; }
+    .login .marca-grande::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 3px; border-radius: 50%; background: var(--acento); }
+    .login h1 { font-size: clamp(36px, 7vw, 56px); }
+    .login p { font-size: 18px; color: var(--suave); margin: 18px 0 32px; max-width: 46ch; }
+    .error-login { color: var(--no); font-weight: 600; margin-top: 16px; }
+
+    /* Lista de eventos */
+    .eventos { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+    .evento {
+      display: grid; grid-template-columns: 56px 1fr auto; gap: 18px; align-items: center;
+      padding: 18px 22px; background: var(--superficie); border: 1px solid var(--linea);
+      border-left: 6px solid var(--tono); border-radius: 12px; text-decoration: none;
+    }
+    .evento:hover { border-color: var(--tinta); border-left-color: var(--tono); }
+    .evento-emoji { font-size: 34px; text-align: center; }
+    .evento-tipo { display: block; font-size: 14px; font-weight: 600; color: var(--suave); }
+    .evento-titulo { display: block; font-family: var(--display); font-size: 22px; font-weight: 600; line-height: 1.2; }
+    .evento-meta { display: block; color: var(--suave); font-size: 14.5px; }
+    .evento-conteo { text-align: right; font-size: 14px; color: var(--suave); }
+    .evento-conteo strong { display: block; font-family: var(--display); font-size: 28px; color: var(--tinta); line-height: 1; }
+    .aviso-cupo { margin: 0; padding: 10px 14px; background: var(--espera-suave); color: var(--espera); border-radius: 10px; font-weight: 600; font-size: 14.5px; }
+
+    /* Cabecera de evento */
+    .volver { display: inline-block; color: var(--suave); font-weight: 600; font-size: 14.5px; margin-bottom: 18px; }
+    .cabecera-evento { border-left: 6px solid var(--tono); padding-left: 18px; }
+    .cabecera-evento .evento-meta { margin-top: 8px; font-size: 15.5px; }
+    .pestanas { display: flex; gap: 6px; margin: 26px 0 24px; border-bottom: 1.5px solid var(--linea); overflow-x: auto; }
+    .pestanas a { padding: 10px 14px; text-decoration: none; font-weight: 600; color: var(--suave); border-bottom: 3px solid transparent; margin-bottom: -1.5px; white-space: nowrap; }
+    .pestanas a[aria-current="page"] { color: var(--tinta); border-bottom-color: var(--tinta); }
+
+    /* Resumen */
+    .rejilla-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 20px; margin-bottom: 20px; }
+    .rejilla-resumen .panel + .panel { margin-top: 0; }
+    .cifra { font-family: var(--display); font-weight: 800; font-size: 64px; line-height: 1; margin: 0; }
+    .cifra span { font-size: 22px; font-weight: 600; }
+    .panel p { margin: 10px 0 0; }
+    .nota { color: var(--suave); font-size: 14px; }
+    .apilada { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: #EEF0EC; }
+    .seg.ok, .leyenda i.ok { background: var(--ok); }
+    .seg.no, .leyenda i.no { background: var(--no); }
+    .seg.espera, .leyenda i.espera { background: #D8C58E; }
+    .leyenda { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; font-size: 15px; }
+    .leyenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
+    .progreso { height: 10px; border-radius: 6px; background: #EEF0EC; overflow: hidden; margin: 12px 0; }
+    .progreso span { display: block; height: 100%; background: var(--tinta); }
+    .progreso.lleno span { background: var(--ok); }
+    .regalos-resumen { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+    .regalos-resumen .fila { display: flex; justify-content: space-between; gap: 12px; font-weight: 600; }
+    .regalos-resumen .progreso { margin: 6px 0 0; height: 8px; }
+    .acciones-pie { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+
+    /* Formularios en fila */
+    .fila-form { display: grid; grid-template-columns: 2fr 1.4fr 110px auto; gap: 12px; align-items: end; }
+    .fila-form .c-btn { display: flex; gap: 8px; }
+    .fila-form.corta { grid-template-columns: 2fr 120px auto; }
+    @media (max-width: 720px) {
+      .fila-form, .fila-form.corta { grid-template-columns: 1fr 1fr; }
+      .fila-form .c-nombre, .fila-form .c-btn { grid-column: 1 / -1; }
+      .evento { grid-template-columns: 40px 1fr; }
+      .evento-emoji { font-size: 26px; }
+      .evento-conteo { grid-column: 2; text-align: left; }
+      .evento-conteo strong { display: inline; font-size: 18px; }
+    }
+    .importar { margin-top: 18px; }
+    .importar summary { cursor: pointer; font-weight: 600; color: var(--suave); }
+    .importar textarea { margin: 10px 0; }
+
+    /* Invitados */
+    .herramientas { display: grid; gap: 12px; margin-bottom: 14px; }
+    .filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+    .filtro { min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1.5px solid var(--linea); background: var(--superficie); font: 600 14px var(--texto); color: var(--tinta); cursor: pointer; }
+    .filtro[aria-pressed="true"] { background: var(--tinta); border-color: var(--tinta); color: #fff; }
+    .filtro b { font-weight: 700; opacity: .7; margin-left: 4px; }
+
+    .lista { list-style: none; margin: 0; padding: 0; background: var(--superficie); border: 1px solid var(--linea); border-radius: 16px; }
+    .lista > li { display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; align-items: center; padding: 16px 20px; }
+    .lista > li + li { border-top: 1px solid var(--linea); }
+    .item-info strong { display: block; font-size: 16.5px; }
+    .item-sub { display: block; font-size: 14px; color: var(--suave); }
+    .item-acciones { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .chip { display: inline-block; padding: 4px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 600; }
+    .chip.ok { background: var(--ok-suave); color: var(--ok); }
+    .chip.no { background: var(--no-suave); color: var(--no); }
+    .chip.espera { background: var(--espera-suave); color: var(--espera); }
+    .chip.neutro { background: #EEF0EC; color: var(--suave); }
+
+    .mas { position: relative; }
+    .mas summary { list-style: none; }
+    .mas summary::-webkit-details-marker { display: none; }
+    .menu {
+      position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 190px;
+      background: #fff; border: 1px solid var(--linea); border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(31,42,68,.14); padding: 6px;
+    }
+    .menu button { display: block; width: 100%; text-align: left; padding: 10px 12px; border: 0; background: none; border-radius: 8px; font: 500 15px var(--texto); color: var(--tinta); cursor: pointer; }
+    .menu button:hover { background: var(--fondo); }
+    .menu .peligro { color: var(--no); }
+    @media (max-width: 560px) { .mas .menu { right: auto; left: 0; } }
+
+    /* Formulario de evento */
+    .form-evento { display: grid; gap: 30px; }
+    .tipos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .tipo-op { position: relative; }
+    .tipo-op input { position: absolute; opacity: 0; }
+    .tipo-op > span { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 8px; border: 1.5px solid var(--linea); border-radius: 12px; font-weight: 600; cursor: pointer; }
+    .tipo-op > span > span { font-size: 26px; }
+    .tipo-op input:checked + span { border-color: var(--tinta); box-shadow: inset 0 0 0 1.5px var(--tinta); background: #F6F7F4; }
+    .tipo-op input:focus-visible + span { outline: 3px solid var(--acento); outline-offset: 2px; }
+    .rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+    .ancho { grid-column: 1 / -1; }
+    .checks { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 18px; }
+    .checks label, .interruptor { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .checks input, .interruptor input { width: 20px; height: 20px; accent-color: var(--tinta); }
+    .previa { white-space: pre-wrap; background: #E7F5EA; border-radius: 12px; padding: 14px 16px; font: 15px/1.5 var(--texto); margin: 12px 0 0; }
+    .acciones-form { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+
+    /* Admin */
+    .tabla-scroll { overflow-x: auto; }
+    .tabla { width: 100%; border-collapse: collapse; font-size: 15px; }
+    .tabla th { text-align: left; font-size: 13.5px; color: var(--suave); font-weight: 600; padding: 8px 10px; border-bottom: 1.5px solid var(--linea); }
+    .tabla td { padding: 12px 10px; border-bottom: 1px solid var(--linea); vertical-align: middle; }
+    .tabla input[type="number"] { width: 80px; min-height: 36px; padding: 6px 8px; }
+
+    /* Aviso flotante */
+    .aviso {
+      position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 30px);
+      background: var(--tinta); color: #fff; padding: 12px 18px; border-radius: 12px;
+      font-weight: 600; max-width: calc(100% - 32px); opacity: 0; pointer-events: none;
+      transition: opacity .2s, transform .2s; z-index: 20;
+    }
+    .aviso.visible { opacity: 1; transform: translate(-50%, 0); }
+    .aviso.error { background: var(--no); }
+    @media (prefers-reduced-motion: reduce) { .aviso { transition: none; } }
+  </style>
+</head>
+<body>
+
+<header class="barra" id="barra" hidden>
+  <a class="marca" href="#/">Anfitrión</a>
+  <nav id="nav" aria-label="Principal"></nav>
+  <div class="usuario"><span id="usuario-nombre"></span><button class="btn-texto" id="salir">Cerrar sesión</button></div>
+</header>
+
+<main class="vista" id="vista"><p class="cargando">Cargando…</p></main>
+<div class="aviso" id="aviso" role="status" aria-live="polite"></div>
+
+<script>
+  const S = { token: null, me: null, query: new URLSearchParams(), refresco: null };
+  const vista = document.getElementById('vista');
+  const $ = sel => document.querySelector(sel);
+
+
+  /* ═════════ Sesión con Google ═════════ */
+
+  function leerJwt(t) {
+    try {
+      const b = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b), c => c.charCodeAt(0))));
+    } catch { return null; }
+  }
+
+  function tokenVigente() {
+    const t = sessionStorage.getItem('idToken');
+    const p = t && leerJwt(t);
+    if (!p || p.exp * 1000 < Date.now() + 60000) { sessionStorage.removeItem('idToken'); return null; }
+    return t;
+  }
+
+  function esperarGoogle() {
+    return new Promise(ok => {
+      const t = setInterval(() => { if (window.google?.accounts?.id) { clearInterval(t); ok(); } }, 50);
+    });
+  }
+
+  async function llamar(action, data = {}) {
+    if (!tokenVigente()) return sesionVencida('Tu sesión expiró. Vuelve a iniciar sesión.');
+    try {
+      return await api(action, data, S.token);
+    } catch (e) {
+      if (e.codigo === 'AUTH' || e.codigo === 'INACTIVO') return sesionVencida(e.message);
+      throw e;
+    }
+  }
+
+  function sesionVencida(msg) {
+    cerrarSesion(msg);
+    const e = new Error(msg);
+    e.silencioso = true;
+    throw e;
+  }
+
+  function cerrarSesion(msg = '') {
+    sessionStorage.removeItem('idToken');
+    S.token = null; S.me = null;
+    detenerRefresco();
+    $('#barra').hidden = true;
+    google.accounts.id.disableAutoSelect();
+    vistaLogin(msg);
+  }
+
+  function vistaLogin(msg = '') {
+    vista.innerHTML = `
+      <section class="login">
+        <p class="marca-grande">Anfitrión</p>
+        <h1>Tus invitados, confirmados sin perseguir a nadie</h1>
+        <p>Crea tu baby shower, cumpleaños, boda o pollada. Envía cada invitación por WhatsApp y mira en un solo lugar quién viene y qué regalo trae.</p>
+        <div id="boton-google"></div>
+        ${msg ? `<p class="error-login" role="alert">${esc(msg)}</p>` : ''}
+      </section>`;
+    google.accounts.id.renderButton($('#boton-google'),
+      { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', locale: 'es', width: 300 });
+    if (!msg) google.accounts.id.prompt();
+  }
+
+  async function alIniciarSesion(resp) {
+    S.token = resp.credential;
+    sessionStorage.setItem('idToken', S.token);
+    await entrar();
+  }
+
+  async function entrar() {
+    vista.innerHTML = '<p class="cargando">Entrando…</p>';
+    try {
+      S.me = await llamar('me');
+    } catch (e) {
+      if (!e.silencioso) vistaLogin(e.message);
+      return;
+    }
+    $('#barra').hidden = false;
+    $('#usuario-nombre').textContent = S.me.nombre;
+    $('#nav').innerHTML = '<a href="#/" data-nav="eventos">Mis eventos</a>' +
+      (S.me.rol === 'admin' ? '<a href="#/admin" data-nav="admin">Administración</a>' : '');
+    router();
+  }
+
+  $('#salir').addEventListener('click', () => cerrarSesion());
+
+  // Cierra los menús "Más opciones" al hacer clic fuera
+  document.addEventListener('click', e => {
+    document.querySelectorAll('.mas[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); });
+  });
+
+  (async function arrancar() {
+    await esperarGoogle();
+    google.accounts.id.initialize({
+      client_id: APP_CONFIG.GOOGLE_CLIENT_ID,
+      callback: alIniciarSesion,
+      auto_select: true,
+      use_fedcm_for_prompt: true
+    });
+    S.token = tokenVigente();
+    if (S.token) await entrar(); else vistaLogin();
+    window.addEventListener('hashchange', router);
+  })();
+
+
+  /* ═════════ Rutas ═════════ */
+
+  function router() {
+    if (!S.me) return;
+    detenerRefresco();
+    const [camino, qs] = location.hash.replace(/^#\/?/, '').split('?');
+    const partes = camino.split('/').filter(Boolean);
+    S.query = new URLSearchParams(qs || '');
+
+    document.querySelectorAll('#nav a').forEach(a => {
+      const activo = (a.dataset.nav === 'admin') === (partes[0] === 'admin');
+      if (activo) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+
+    if (partes[0] === 'admin' && S.me.rol === 'admin') return ejecutar(vistaAdmin);
+    if (partes[0] === 'nuevo') return ejecutar(vistaNuevo);
+    if (partes[0] === 'evento' && partes[1]) return ejecutar(() => vistaEvento(partes[1], partes[2] || 'resumen'));
+    return ejecutar(vistaMisEventos);
+  }
+
+  async function ejecutar(fn) {
+    try {
+      await fn();
+    } catch (e) {
+      if (e.silencioso) return;
+      vista.innerHTML = `<div class="vacio"><p>${esc(e.message)}</p>
+        <button class="btn" onclick="router()">Reintentar</button> <a class="btn" href="#/">Ir a mis eventos</a></div>`;
+    }
+  }
+
+  function detenerRefresco() {
+    clearInterval(S.refresco);
+    S.refresco = null;
+  }
+
+
+  /* ═════════ Utilidades de interfaz ═════════ */
+
+  function aviso(msg, tipo = 'ok') {
+    const a = $('#aviso');
+    a.textContent = msg;
+    a.className = 'aviso visible ' + tipo;
+    clearTimeout(a._t);
+    a._t = setTimeout(() => { a.className = 'aviso'; }, 3800);
+  }
+
+  function avisoError(e) {
+    if (!e.silencioso) aviso(e.message, 'error');
+  }
+
+  async function copiar(texto) {
+    try {
+      await navigator.clipboard.writeText(texto);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = texto;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+  }
+
+  async function conBoton(btn, texto, fn) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = texto;
+    try { return await fn(); }
+    finally {
+      btn.disabled = false;
+      if (btn.textContent === texto) btn.textContent = original;
+    }
+  }
+
+  function pct(n, d) {
+    return d ? Math.round(n * 100 / d) : 0;
+  }
+
+
+  /* ═════════ Mis eventos ═════════ */
+
+  async function vistaMisEventos() {
+    const ruta = location.hash;
+    vista.innerHTML = '<p class="cargando">Cargando tus eventos…</p>';
+    const r = await llamar('misEventos');
+    if (ruta !== location.hash) return;
+
+    const libres = r.cuotaEventos - r.eventos.length;
+    const cupoTexto = `Usaste ${r.eventos.length} de ${r.cuotaEventos} ${r.cuotaEventos === 1 ? 'evento disponible' : 'eventos disponibles'}.`;
+
+    vista.innerHTML = `
+      <div class="encabezado">
+        <div><h1>Tus eventos</h1><p>${cupoTexto}</p></div>
+        ${libres > 0
+          ? '<a class="btn primario" href="#/nuevo">Crear evento</a>'
+          : '<p class="aviso-cupo">Llegaste a tu límite. Pide al administrador que amplíe tu cupo.</p>'}
+      </div>
+      ${r.eventos.length
+        ? `<ul class="eventos">${r.eventos.map(tarjetaEvento).join('')}</ul>`
+        : '<div class="vacio"><p>Todavía no tienes eventos. Crea el primero para empezar a invitar.</p></div>'}`;
+  }
+
+  function tarjetaEvento(e) {
+    const t = tipoEvento(e.tipo);
+    return `
+      <li><a class="evento" href="#/evento/${esc(e.id)}" style="--tono:${t.tema.acento}">
+        <span class="evento-emoji" aria-hidden="true">${t.emoji}</span>
+        <span>
+          <span class="evento-tipo">${esc(t.nombre)}${e.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
+          <span class="evento-titulo">${esc(e.titulo)}</span>
+          <span class="evento-meta">${cap(fechaLarga(e.fecha))}, ${esc(e.lugar)}</span>
+        </span>
+        <span class="evento-conteo"><strong>${e.confirmados}</strong> de ${e.totalInvitaciones} confirmaron</span>
+      </a></li>`;
+  }
+
+
+  /* ═════════ Evento ═════════ */
+
+  async function vistaNuevo() {
+    vista.innerHTML = `<a class="volver" href="#/">Volver a tus eventos</a>
+      <div class="encabezado"><h1>Nuevo evento</h1></div><div id="seccion"></div>`;
+    formEvento($('#seccion'), null);
+  }
+
+  async function vistaEvento(id, seccion) {
+    const ruta = location.hash;
+    vista.innerHTML = '<p class="cargando">Cargando evento…</p>';
+
+    const extra = { invitados: 'listarInvitados', regalos: 'listarRegalos' }[seccion];
+    const [res, datos] = await Promise.all([
+      llamar('resumen', { eventoId: id }),
+      extra ? llamar(extra, { eventoId: id }) : null
+    ]);
+    if (ruta !== location.hash) return;
+
+    vista.innerHTML = cabeceraEvento(res.evento, seccion) + '<div id="seccion"></div>';
+    const cont = $('#seccion');
+
+    if (seccion === 'invitados') seccionInvitados(cont, res.evento, datos);
+    else if (seccion === 'regalos') seccionRegalos(cont, res.evento, datos);
+    else if (seccion === 'ajustes') formEvento(cont, res.evento);
+    else {
+      seccionResumen(cont, res);
+      S.refresco = setInterval(async () => {
+        if (ruta !== location.hash || document.hidden) return;
+        try { seccionResumen(cont, await llamar('resumen', { eventoId: id })); } catch { /* reintenta en el siguiente ciclo */ }
+      }, 60000);
+    }
+  }
+
+  function cabeceraEvento(ev, sec) {
+    const t = tipoEvento(ev.tipo);
+    const pestanas = [['resumen', 'Resumen'], ['invitados', 'Invitados'], ['regalos', 'Regalos'], ['ajustes', 'Ajustes']];
+    const ajeno = ev.ownerEmail !== S.me.email ? ` Evento de ${esc(ev.ownerEmail)}.` : '';
+    return `
+      <a class="volver" href="#/">Volver a tus eventos</a>
+      <div class="cabecera-evento" style="--tono:${t.tema.acento}">
+        <span class="evento-tipo">${t.emoji} ${esc(t.nombre)}${ev.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
+        <h1>${esc(ev.titulo)}</h1>
+        <p class="evento-meta">${cap(fechaLarga(ev.fecha))} a las ${horaCorta(ev.hora)}, ${esc(ev.lugar)}.${ajeno}</p>
+      </div>
+      <nav class="pestanas" aria-label="Secciones del evento">
+        ${pestanas.map(([k, l]) => `<a href="#/evento/${esc(ev.id)}/${k}" ${k === sec ? 'aria-current="page"' : ''}>${l}</a>`).join('')}
+      </nav>`;
+  }
+
+
+  /* ── Resumen (dashboard del dueño) ── */
+
+  function seccionResumen(cont, r) {
+    const tipos = r.evento.tiposPermitidos;
+    const vienen = r.adultos + r.ninos + r.mascotas;
+    const porEnviar = r.invitaciones - r.enviadas;
+
+    const regalos = r.regalos.length
+      ? `<ul class="regalos-resumen">${r.regalos.map(g => `
+          <li><div class="fila"><span>${esc(g.nombre)}</span><span class="nota">${g.reservados} de ${g.cupo}</span></div>
+          <div class="progreso ${g.reservados >= g.cupo ? 'lleno' : ''}"><span style="width:${pct(g.reservados, g.cupo)}%"></span></div></li>`).join('')}</ul>`
+      : `<p class="nota">Aún no agregaste regalos. <a href="#/evento/${esc(r.evento.id)}/regalos">Agregar regalos</a></p>`;
+
+    cont.innerHTML = `
+      <div class="rejilla-resumen">
+        <section class="panel">
+          <h2>Vienen</h2>
+          <p class="cifra">${vienen} <span>${vienen === 1 ? 'persona' : 'personas'}</span></p>
+          <p>${cap(listaNatural(tipos.map(t => cantidad(r[t], t))))}.</p>
+          <p class="nota">Las invitaciones permiten hasta ${r.cupoMaximo} personas en total.</p>
+        </section>
+        <section class="panel">
+          <h2>Respuestas</h2>
+          <div class="apilada" role="img" aria-label="${r.confirmados} confirmaron, ${r.noAsisten} no asistirán, ${r.sinRespuesta} sin responder">
+            <span class="seg ok" style="flex:${r.confirmados}"></span>
+            <span class="seg no" style="flex:${r.noAsisten}"></span>
+            <span class="seg espera" style="flex:${r.sinRespuesta}"></span>
+          </div>
+          <ul class="leyenda">
+            <li><i class="ok"></i>${r.confirmados} confirmaron</li>
+            <li><i class="no"></i>${r.noAsisten} no asistirán</li>
+            <li><i class="espera"></i>${r.sinRespuesta} sin responder</li>
+          </ul>
+        </section>
+        <section class="panel">
+          <h2>Envíos</h2>
+          <p>${r.enviadas} de ${r.invitaciones} invitaciones enviadas.</p>
+          <div class="progreso ${porEnviar === 0 && r.invitaciones ? 'lleno' : ''}"><span style="width:${pct(r.enviadas, r.invitaciones)}%"></span></div>
+          ${porEnviar > 0 ? `<a class="btn chico" href="#/evento/${esc(r.evento.id)}/invitados?f=porEnviar">Ver las ${porEnviar} por enviar</a>` : ''}
+        </section>
+      </div>
+      <section class="panel"><h2>Regalos</h2>${regalos}</section>
+      <div class="acciones-pie">
+        <button class="btn" id="btn-actualizar">Actualizar</button>
+        <button class="btn" id="btn-csv">Descargar lista en CSV</button>
+        <span class="nota">Se actualiza solo cada minuto.</span>
+      </div>`;
+
+    $('#btn-actualizar').onclick = e => conBoton(e.target, 'Actualizando…', async () => {
+      try { seccionResumen(cont, await llamar('resumen', { eventoId: r.evento.id })); } catch (err) { avisoError(err); }
+    });
+    $('#btn-csv').onclick = e => conBoton(e.target, 'Preparando…', async () => {
+      try { descargarCsv(r.evento, await llamar('listarInvitados', { eventoId: r.evento.id })); } catch (err) { avisoError(err); }
+    });
+  }
+
+  function descargarCsv(ev, lista) {
+    const celda = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const filas = [['Nombre', 'WhatsApp', 'Máximo', 'Enviado', 'Estado', 'Adultos', 'Niños', 'Mascotas', 'Regalo', 'Respondió', 'Enlace']]
+      .concat(lista.map(i => [i.nombre, i.whatsapp, i.maxPersonas, i.enviado ? 'Sí' : 'No', i.estado,
+        i.adultos, i.ninos, i.mascotas, i.regaloNombre, i.fechaRespuesta, linkInvitacion(i.codigo)]));
+    const csv = '\uFEFF' + filas.map(f => f.map(celda).join(',')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = ev.titulo.replace(/[^\w\sáéíóúñ-]/gi, '').trim() + ' - invitados.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+
+  /* ── Invitados ── */
+
+  const FILTROS = {
+    todos: ['Todos', () => true],
+    porEnviar: ['Por enviar', i => !i.enviado],
+    esperando: ['Esperando respuesta', i => i.enviado && i.estado === 'Pendiente'],
+    confirmados: ['Confirmados', i => i.estado === 'Confirmado'],
+    noAsisten: ['No asisten', i => i.estado === 'No asistirá']
+  };
+
+  function seccionInvitados(cont, ev, lista) {
+    const st = { lista, filtro: FILTROS[S.query.get('f')] ? S.query.get('f') : 'todos', q: '', editando: null };
+
+    cont.innerHTML = `
+      <section class="panel">
+        <h2 id="form-inv-titulo">Agregar invitado</h2>
+        <form id="form-inv" class="fila-form">
+          <div class="c-nombre"><label class="campo" for="inv-nombre">Nombre en la invitación</label>
+            <input id="inv-nombre" required maxlength="80" placeholder="Familia Pérez"></div>
+          <div><label class="campo" for="inv-wa">WhatsApp</label>
+            <input id="inv-wa" inputmode="tel" placeholder="999 888 777"></div>
+          <div><label class="campo" for="inv-max">Máx. personas</label>
+            <input id="inv-max" type="number" min="1" max="20" value="${ev.maxPersonasDefault}"></div>
+          <div class="c-btn"><button class="btn primario" id="inv-guardar">Agregar</button>
+            <button type="button" class="btn" id="inv-cancelar" hidden>Cancelar</button></div>
+        </form>
+        <details class="importar">
+          <summary>Importar varios desde Excel</summary>
+          <p class="ayuda">Copia desde Excel o Google Sheets las columnas nombre, WhatsApp y máximo de personas (esta última es opcional) y pégalas aquí. Una persona por fila.</p>
+          <textarea id="imp-texto" placeholder="Familia Pérez, 999888777, 4&#10;Tía Rosa, 987654321, 2"></textarea>
+          <button class="btn" id="imp-btn" type="button">Importar lista</button>
+        </details>
+      </section>
+      <div class="herramientas" style="margin-top:24px">
+        <input type="search" id="buscar" placeholder="Buscar por nombre o número" aria-label="Buscar invitados">
+        <div class="filtros" id="filtros" role="group" aria-label="Filtrar invitados"></div>
+      </div>
+      <ul class="lista" id="lista-inv"></ul>`;
+
+    const tipos = ev.tiposPermitidos;
+
+    function fila(i) {
+      const wa = linkWhatsApp(i.whatsapp, armarMensaje(ev, i));
+      let estado;
+      if (i.estado === 'Confirmado') estado = `<span class="chip ok">Viene: ${esc(detallePersonas(i, tipos))}</span>`;
+      else if (i.estado === 'No asistirá') estado = '<span class="chip no">No asistirá</span>';
+      else if (i.enviado) estado = '<span class="chip espera">Esperando respuesta</span>';
+      else estado = '<span class="chip neutro">Sin enviar</span>';
+
+      return `
+        <li data-id="${esc(i.id)}">
+          <div class="item-info">
+            <strong>${esc(i.nombre)}</strong>
+            <span class="item-sub">${i.whatsapp ? esc(formatoTel(i.whatsapp)) : 'Sin WhatsApp'}, hasta ${i.maxPersonas} ${i.maxPersonas === 1 ? 'persona' : 'personas'}</span>
+            ${i.regaloNombre ? `<span class="item-sub">Regalo: ${esc(i.regaloNombre)}</span>` : ''}
+          </div>
+          <div>${estado}</div>
+          <div class="item-acciones">
+            ${wa ? `<a class="btn chico wa" href="${esc(wa)}" target="_blank" rel="noopener">Enviar por WhatsApp</a>` : ''}
+            <button class="btn chico" data-accion="copiar">Copiar mensaje</button>
+            <button class="btn chico ${i.enviado ? 'hecho' : ''}" data-accion="enviado" aria-pressed="${i.enviado}">${i.enviado ? 'Enviado ✓' : 'Marcar como enviado'}</button>
+            <details class="mas"><summary class="btn chico">Más opciones</summary>
+              <div class="menu">
+                <button data-accion="editar">Editar</button>
+                <button data-accion="link">Copiar solo el enlace</button>
+                ${i.estado !== 'Pendiente' ? '<button data-accion="reiniciar">Borrar su respuesta</button>' : ''}
+                <button data-accion="eliminar" class="peligro">Eliminar invitado</button>
+              </div>
+            </details>
+          </div>
+        </li>`;
+    }
+
+    function pintarLista() {
+      $('#filtros').innerHTML = Object.entries(FILTROS).map(([k, [nombre, fn]]) =>
+        `<button class="filtro" data-filtro="${k}" aria-pressed="${st.filtro === k}">${nombre}<b>${st.lista.filter(fn).length}</b></button>`).join('');
+
+      const q = st.q.toLowerCase();
+      const visibles = st.lista.filter(FILTROS[st.filtro][1])
+        .filter(i => !q || i.nombre.toLowerCase().includes(q) || i.whatsapp.includes(q.replace(/\D/g, '') || '\u0000'));
+
+      $('#lista-inv').innerHTML = visibles.length
+        ? visibles.map(fila).join('')
+        : `<li><p class="nota" style="margin:0">${st.lista.length
+            ? 'Nadie coincide con este filtro.'
+            : 'Agrega a tu primer invitado arriba, o importa tu lista completa desde Excel.'}</p></li>`;
+    }
+
+    function limpiarForm() {
+      st.editando = null;
+      $('#form-inv').reset();
+      $('#inv-max').value = ev.maxPersonasDefault;
+      $('#form-inv-titulo').textContent = 'Agregar invitado';
+      $('#inv-guardar').textContent = 'Agregar';
+      $('#inv-cancelar').hidden = true;
+    }
+
+    function editar(i) {
+      st.editando = i;
+      $('#inv-nombre').value = i.nombre;
+      $('#inv-wa').value = i.whatsapp;
+      $('#inv-max').value = i.maxPersonas;
+      $('#form-inv-titulo').textContent = 'Editar a ' + i.nombre;
+      $('#inv-guardar').textContent = 'Guardar cambios';
+      $('#inv-cancelar').hidden = false;
+      $('#form-inv').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      $('#inv-nombre').focus();
+    }
+
+    function reemplazar(nuevo) {
+      st.lista = st.lista.map(x => x.id === nuevo.id ? nuevo : x);
+    }
+
+    $('#form-inv').addEventListener('submit', e => {
+      e.preventDefault();
+      const editando = st.editando;
+      conBoton($('#inv-guardar'), 'Guardando…', async () => {
+        try {
+          const r = await llamar('guardarInvitado', {
+            eventoId: ev.id, id: editando?.id,
+            nombre: $('#inv-nombre').value, whatsapp: $('#inv-wa').value, maxPersonas: $('#inv-max').value
+          });
+          if (editando) reemplazar(r); else st.lista.unshift(r);
+          limpiarForm();
+          pintarLista();
+          aviso(editando ? 'Cambios guardados.' : r.nombre + ' agregado.');
+          $('#inv-nombre').focus();
+        } catch (err) { avisoError(err); }
+      });
+    });
+
+    $('#inv-cancelar').onclick = limpiarForm;
+
+    $('#imp-btn').onclick = e => {
+      const filas = $('#imp-texto').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+        .map(l => (l.includes('\t') ? l.split('\t') : l.split(/[,;]/)).map(s => s.trim()))
+        .filter((p, k) => !(k === 0 && p[0].toLowerCase() === 'nombre'))
+        .map(p => ({ nombre: p[0], whatsapp: p[1] || '', maxPersonas: p[2] || '' }));
+      if (!filas.length) return aviso('Pega al menos una fila.', 'error');
+
+      conBoton(e.target, 'Importando…', async () => {
+        try {
+          const r = await llamar('importarInvitados', { eventoId: ev.id, filas });
+          st.lista = await llamar('listarInvitados', { eventoId: ev.id });
+          $('#imp-texto').value = '';
+          e.target.closest('details').open = false;
+          pintarLista();
+          aviso(r.importados + ' invitados importados.');
+        } catch (err) { avisoError(err); }
+      });
+    };
+
+    $('#buscar').addEventListener('input', e => { st.q = e.target.value.trim(); pintarLista(); });
+
+    cont.addEventListener('click', async e => {
+      const f = e.target.closest('[data-filtro]');
+      if (f) { st.filtro = f.dataset.filtro; pintarLista(); return; }
+
+      const btn = e.target.closest('[data-accion]');
+      if (!btn) return;
+      const li = btn.closest('li[data-id]');
+      const inv = st.lista.find(x => x.id === li?.dataset.id);
+      if (!inv) return;
+      btn.closest('details')?.removeAttribute('open');
+
+      try {
+        switch (btn.dataset.accion) {
+          case 'copiar':
+            await copiar(armarMensaje(ev, inv));
+            aviso('Mensaje copiado. Pégalo en WhatsApp, Messenger o Instagram.');
+            break;
+          case 'link':
+            await copiar(linkInvitacion(inv.codigo));
+            aviso('Enlace copiado.');
+            break;
+          case 'enviado': {
+            const valor = !inv.enviado;
+            inv.enviado = valor;
+            pintarLista();
+            try {
+              await llamar('marcarEnviado', { eventoId: ev.id, id: inv.id, enviado: valor });
+            } catch (err) {
+              inv.enviado = !valor;
+              pintarLista();
+              throw err;
+            }
+            break;
+          }
+          case 'editar':
+            editar(inv);
+            break;
+          case 'reiniciar':
+            if (!confirm(`¿Borrar la respuesta de ${inv.nombre}? Podrá volver a responder con el mismo enlace.`)) return;
+            reemplazar(await llamar('reiniciarRespuesta', { eventoId: ev.id, id: inv.id }));
+            pintarLista();
+            aviso('Respuesta borrada.');
+            break;
+          case 'eliminar':
+            if (!confirm(`¿Eliminar a ${inv.nombre}? Su enlace de invitación dejará de funcionar.`)) return;
+            await llamar('eliminarInvitado', { eventoId: ev.id, id: inv.id });
+            st.lista = st.lista.filter(x => x !== inv);
+            pintarLista();
+            aviso('Invitado eliminado.');
+            break;
+        }
+      } catch (err) { avisoError(err); }
+    });
+
+    pintarLista();
+  }
+
+
+  /* ── Regalos ── */
+
+  function seccionRegalos(cont, ev, lista) {
+    const st = { lista, editando: null };
+
+    cont.innerHTML = `
+      <section class="panel">
+        <h2 id="form-reg-titulo">Agregar regalo</h2>
+        <form id="form-reg" class="fila-form corta">
+          <div class="c-nombre"><label class="campo" for="reg-nombre">Regalo</label>
+            <input id="reg-nombre" required maxlength="80" placeholder="Paquete de pañales talla 2"></div>
+          <div><label class="campo" for="reg-cupo">Cuántos</label>
+            <input id="reg-cupo" type="number" min="1" max="100" value="1"></div>
+          <div class="c-btn"><button class="btn primario" id="reg-guardar">Agregar</button>
+            <button type="button" class="btn" id="reg-cancelar" hidden>Cancelar</button></div>
+        </form>
+        <p class="ayuda">Cada invitado puede elegir un regalo al responder. "Cuántos" indica cuántas personas pueden elegir el mismo; cuando se completa, deja de aparecer en la invitación.</p>
+      </section>
+      <ul class="lista" id="lista-reg" style="margin-top:20px"></ul>`;
+
+    function pintar() {
+      $('#lista-reg').innerHTML = st.lista.length ? st.lista.map(r => `
+        <li data-id="${esc(r.id)}">
+          <div class="item-info">
+            <strong>${esc(r.nombre)}</strong>
+            <span class="item-sub">${r.reservados} de ${r.cupo} reservados${r.reservadoPor.length ? ': ' + esc(listaNatural(r.reservadoPor)) : ''}</span>
+            <div class="progreso ${r.reservados >= r.cupo ? 'lleno' : ''}" style="max-width:320px;margin:8px 0 0"><span style="width:${pct(r.reservados, r.cupo)}%"></span></div>
+          </div>
+          <div class="item-acciones" style="grid-column:auto">
+            <button class="btn chico" data-accion="editar">Editar</button>
+            <button class="btn chico peligro" data-accion="eliminar" ${r.reservados ? 'disabled title="Ya tiene reservas"' : ''}>Eliminar</button>
+          </div>
+        </li>`).join('')
+        : '<li><p class="nota" style="margin:0">Todavía no hay regalos. Agrega los que te gustaría recibir.</p></li>';
+    }
+
+    function limpiar() {
+      st.editando = null;
+      $('#form-reg').reset();
+      $('#form-reg-titulo').textContent = 'Agregar regalo';
+      $('#reg-guardar').textContent = 'Agregar';
+      $('#reg-cancelar').hidden = true;
+    }
+
+    $('#form-reg').addEventListener('submit', e => {
+      e.preventDefault();
+      const editando = st.editando;
+      conBoton($('#reg-guardar'), 'Guardando…', async () => {
+        try {
+          const r = await llamar('guardarRegalo', {
+            eventoId: ev.id, id: editando?.id, nombre: $('#reg-nombre').value, cupo: $('#reg-cupo').value
+          });
+          st.lista = editando ? st.lista.map(x => x.id === r.id ? r : x) : st.lista.concat(r);
+          limpiar();
+          pintar();
+          aviso(editando ? 'Regalo actualizado.' : 'Regalo agregado.');
+        } catch (err) { avisoError(err); }
+      });
+    });
+
+    $('#reg-cancelar').onclick = limpiar;
+
+    cont.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-accion]');
+      if (!btn) return;
+      const r = st.lista.find(x => x.id === btn.closest('li')?.dataset.id);
+      if (!r) return;
+
+      if (btn.dataset.accion === 'editar') {
+        st.editando = r;
+        $('#reg-nombre').value = r.nombre;
+        $('#reg-cupo').value = r.cupo;
+        $('#form-reg-titulo').textContent = 'Editar regalo';
+        $('#reg-guardar').textContent = 'Guardar cambios';
+        $('#reg-cancelar').hidden = false;
+        $('#reg-nombre').focus();
+      }
+      if (btn.dataset.accion === 'eliminar') {
+        if (!confirm(`¿Eliminar "${r.nombre}" de la lista?`)) return;
+        try {
+          await llamar('eliminarRegalo', { eventoId: ev.id, id: r.id });
+          st.lista = st.lista.filter(x => x !== r);
+          pintar();
+          aviso('Regalo eliminado.');
+        } catch (err) { avisoError(err); }
+      }
+    });
+
+    pintar();
+  }
+
+
+  /* ── Crear / editar evento ── */
+
+  function formEvento(cont, ev) {
+    const nuevo = !ev;
+    const v = ev || {
+      tipo: 'babyshower', titulo: '', anfitriones: '', fecha: '', hora: '', lugar: '', direccion: '',
+      linkMaps: '', fechaLimite: '', tiposPermitidos: ['adultos', 'ninos'], maxPersonasDefault: 2,
+      mensajeInvitacion: MENSAJE_DEFAULT, estado: 'activo'
+    };
+    const campo = (id, etiqueta, attrs, clase = '') => `
+      <div class="${clase}"><label class="campo" for="ev-${id}">${etiqueta}</label>
+      <input id="ev-${id}" ${attrs} value="${esc(v[id])}"></div>`;
+
+    cont.innerHTML = `
+      <form id="form-ev" class="panel form-evento">
+        <fieldset>
+          <legend>Tipo de evento</legend>
+          <div class="tipos">
+            ${Object.entries(TIPOS_EVENTO).map(([k, t]) => `
+              <label class="tipo-op"><input type="radio" name="tipo" value="${k}" ${v.tipo === k ? 'checked' : ''}>
+              <span><span aria-hidden="true">${t.emoji}</span>${esc(t.nombre)}</span></label>`).join('')}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Datos del evento</legend>
+          <div class="rejilla">
+            ${campo('titulo', 'Título', 'required maxlength="80" placeholder="Baby shower de Sofía"', 'ancho')}
+            ${campo('anfitriones', 'Anfitriones', 'maxlength="120" placeholder="Diego y Sofía"', 'ancho')}
+            ${campo('fecha', 'Fecha', 'type="date" required')}
+            ${campo('hora', 'Hora', 'type="time" required')}
+            ${campo('fechaLimite', 'Confirmar hasta', 'type="date"')}
+            ${campo('lugar', 'Lugar', 'required maxlength="120" placeholder="Casa de la abuela"')}
+            ${campo('direccion', 'Dirección', 'maxlength="200" placeholder="Av. Primavera 123, Surco"')}
+            ${campo('linkMaps', 'Enlace de Google Maps', 'type="url" maxlength="500" placeholder="https://maps.app.goo.gl/…"')}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Quiénes pueden asistir</legend>
+          <div class="checks">
+            ${Object.entries(TIPOS_INVITADO).map(([k, t]) => `
+              <label><input type="checkbox" name="tipos" value="${k}" ${v.tiposPermitidos.includes(k) || k === 'adultos' ? 'checked' : ''} ${k === 'adultos' ? 'disabled' : ''}> ${cap(t.plural)}</label>`).join('')}
+          </div>
+          <div style="max-width:260px"><label class="campo" for="ev-max">Máximo de personas por invitación</label>
+            <input id="ev-max" type="number" min="1" max="20" value="${v.maxPersonasDefault}"></div>
+          <p class="ayuda">Es el valor inicial de cada invitado y puedes cambiarlo por persona. Con un máximo de 2, el invitado puede venir con 2 adultos, o con 1 adulto y 1 niño.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Mensaje para WhatsApp</legend>
+          <textarea id="ev-mensaje" maxlength="1000">${esc(v.mensajeInvitacion || MENSAJE_DEFAULT)}</textarea>
+          <p class="ayuda">Puedes usar {nombre}, {titulo}, {fecha}, {hora}, {lugar}, {emoji} y {link}. Así lo verá tu invitado:</p>
+          <p class="previa" id="ev-previa"></p>
+        </fieldset>
+
+        ${nuevo ? '' : `<label class="interruptor"><input type="checkbox" id="ev-abierto" ${v.estado !== 'cerrado' ? 'checked' : ''}> Aceptar confirmaciones</label>`}
+
+        <div class="acciones-form">
+          <button class="btn primario" id="ev-guardar">${nuevo ? 'Crear evento' : 'Guardar cambios'}</button>
+          ${nuevo ? '<a class="btn" href="#/">Cancelar</a>' : '<button type="button" class="btn peligro" id="ev-eliminar">Eliminar evento</button>'}
+        </div>
+      </form>`;
+
+    const leerForm = () => ({
+      id: ev?.id,
+      tipo: document.querySelector('input[name="tipo"]:checked').value,
+      titulo: $('#ev-titulo').value,
+      anfitriones: $('#ev-anfitriones').value,
+      fecha: $('#ev-fecha').value,
+      hora: $('#ev-hora').value,
+      fechaLimite: $('#ev-fechaLimite').value,
+      lugar: $('#ev-lugar').value,
+      direccion: $('#ev-direccion').value,
+      linkMaps: $('#ev-linkMaps').value,
+      tiposPermitidos: [...document.querySelectorAll('input[name="tipos"]:checked')].map(x => x.value),
+      maxPersonasDefault: $('#ev-max').value,
+      mensajeInvitacion: $('#ev-mensaje').value,
+      estado: nuevo || $('#ev-abierto').checked ? 'activo' : 'cerrado'
+    });
+
+    const previa = () => {
+      const d = leerForm();
+      $('#ev-previa').textContent = armarMensaje(
+        Object.assign({}, d, { titulo: d.titulo || 'Tu evento', lugar: d.lugar || 'el lugar', fecha: d.fecha || '2026-12-12', hora: d.hora || '16:00' }),
+        { nombre: 'Tía Rosa', codigo: 'EJEMPLO' });
+    };
+    $('#form-ev').addEventListener('input', previa);
+    previa();
+
+    $('#form-ev').addEventListener('submit', e => {
+      e.preventDefault();
+      conBoton($('#ev-guardar'), 'Guardando…', async () => {
+        try {
+          const r = await llamar('guardarEvento', leerForm());
+          aviso(nuevo ? 'Evento creado. Ahora agrega a tus invitados.' : 'Cambios guardados.');
+          if (nuevo) location.hash = '#/evento/' + r.id + '/invitados';
+          else router();
+        } catch (err) { avisoError(err); }
+      });
+    });
+
+    $('#ev-eliminar')?.addEventListener('click', e => {
+      if (!confirm(`¿Eliminar "${ev.titulo}"? También se borrarán todos sus invitados, respuestas y regalos. Esto no se puede deshacer.`)) return;
+      conBoton(e.target, 'Eliminando…', async () => {
+        try {
+          await llamar('eliminarEvento', { id: ev.id });
+          aviso('Evento eliminado.');
+          location.hash = '#/';
+        } catch (err) { avisoError(err); }
+      });
+    });
+  }
+
+
+  /* ═════════ Administración ═════════ */
+
+  async function vistaAdmin() {
+    const ruta = location.hash;
+    vista.innerHTML = '<p class="cargando">Cargando administración…</p>';
+    const [usuarios, eventos] = await Promise.all([llamar('adminUsuarios'), llamar('adminEventos')]);
+    if (ruta !== location.hash) return;
+
+    vista.innerHTML = `<div id="admin">
+      <div class="encabezado"><div><h1>Administración</h1>
+        <p>${usuarios.length} ${usuarios.length === 1 ? 'usuario' : 'usuarios'} y ${eventos.length} ${eventos.length === 1 ? 'evento' : 'eventos'}.</p></div></div>
+
+      <section class="panel">
+        <h2>Usuarios</h2>
+        <div class="tabla-scroll"><table class="tabla">
+          <thead><tr><th>Usuario</th><th>Rol</th><th>Eventos creados</th><th>Cupo de eventos</th><th>Activo</th><th>Último acceso</th><th></th></tr></thead>
+          <tbody>${usuarios.map(u => `
+            <tr data-email="${esc(u.email)}">
+              <td><strong>${esc(u.nombre)}</strong><span class="item-sub">${esc(u.email)}</span></td>
+              <td>${u.rol === 'admin' ? 'Admin' : 'Organizador'}</td>
+              <td>${u.eventosUsados}</td>
+              <td><input type="number" min="0" max="100" class="in-cuota" value="${u.cuotaEventos}" aria-label="Cupo de eventos de ${esc(u.nombre)}"></td>
+              <td><input type="checkbox" class="in-activo" ${u.activo ? 'checked' : ''} ${u.email === S.me.email ? 'disabled' : ''} aria-label="Cuenta activa de ${esc(u.nombre)}"></td>
+              <td class="nota">${esc(u.ultimoAcceso)}</td>
+              <td><button class="btn chico" data-accion="guardar">Guardar</button></td>
+            </tr>`).join('')}</tbody>
+        </table></div>
+      </section>
+
+      <section class="panel">
+        <h2>Todos los eventos</h2>
+        ${eventos.length ? `<div class="tabla-scroll"><table class="tabla">
+          <thead><tr><th>Evento</th><th>Dueño</th><th>Fecha</th><th>Invitaciones</th><th></th></tr></thead>
+          <tbody>${eventos.map(e => `
+            <tr><td>${tipoEvento(e.tipo).emoji} <strong>${esc(e.titulo)}</strong></td>
+              <td>${esc(e.ownerEmail)}</td><td>${esc(e.fecha)}</td><td>${e.totalInvitaciones}</td>
+              <td><a class="btn chico" href="#/evento/${esc(e.id)}">Abrir</a></td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="nota">Nadie ha creado eventos todavía.</p>'}
+      </section></div>`;
+
+    $('#admin').addEventListener('click', e => {
+      const btn = e.target.closest('[data-accion="guardar"]');
+      if (!btn) return;
+      const tr = btn.closest('tr');
+      conBoton(btn, 'Guardando…', async () => {
+        try {
+          const u = await llamar('adminActualizarUsuario', {
+            email: tr.dataset.email,
+            cuotaEventos: Number(tr.querySelector('.in-cuota').value),
+            activo: tr.querySelector('.in-activo').checked
+          });
+          if (u.email === S.me.email) S.me.cuotaEventos = u.cuotaEventos;
+          aviso('Usuario actualizado.');
+        } catch (err) { avisoError(err); }
+      });
+    });
+  }
+</script>
+
+</body>
+</html>
