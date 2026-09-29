@@ -425,6 +425,8 @@ const ACCIONES = {
 
   reiniciarRespuesta: d => rpc('reiniciar_respuesta', { p_invitado_id: d.id }),
 
+  marcarRecordado: d => rpc('marcar_recordado', { p_invitado_id: d.id }),
+
   /* Regalos */
   listarRegalos: d => rpc('listar_regalos', { p_evento_id: d.eventoId }),
 
@@ -538,6 +540,29 @@ function fechaLarga(iso) {
     { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+// Enlace que abre Google Calendar con el evento ya llenado (el usuario solo presiona "Guardar").
+// La fecha y hora del evento están en hora de Lima; se envían en UTC. Duración por defecto: 3 horas.
+function enlaceGoogleCalendar(ev, detalles = '') {
+  const inicio = new Date(`${ev.fecha}T${String(ev.hora || '00:00').slice(0, 5)}:00-05:00`);
+  const fin = new Date(inicio.getTime() + 3 * 3600 * 1000);
+  const utc = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const lugar = [ev.lugar, ev.direccion].filter(Boolean).join(', ');
+  const texto = [
+    ev.anfitriones ? 'Anfitriones: ' + ev.anfitriones : '',
+    ev.linkMaps ? 'Cómo llegar: ' + ev.linkMaps : '',
+    detalles
+  ].filter(Boolean).join('\n');
+  const p = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: ev.titulo,
+    dates: utc(inicio) + '/' + utc(fin),
+    location: lugar,
+    details: texto,
+    ctz: 'America/Lima'
+  });
+  return 'https://calendar.google.com/calendar/render?' + p.toString();
+}
+
 function horaCorta(hhmm) {
   if (!hhmm) return '';
   const [h, m] = hhmm.split(':').map(Number);
@@ -587,6 +612,15 @@ function armarMensaje(ev, inv) {
     link: linkInvitacion(inv.codigo)
   };
   return plantilla.replace(/\{(\w+)\}/g, (todo, k) => (k in valores ? valores[k] : todo));
+}
+
+// Mensaje de recordatorio para quienes recibieron la invitación y aún no responden
+function armarRecordatorio(ev, inv) {
+  const limite = ev.fechaLimite ? ' Puedes confirmar hasta el ' + fechaLarga(ev.fechaLimite) + '.' : '';
+  return 'Hola ' + inv.nombre + ' ' + tipoEvento(ev.tipo).emoji + '\n\n' +
+    'Te recordamos nuestra invitación a *' + ev.titulo + '* el ' + fechaLarga(ev.fecha) +
+    ' a las ' + horaCorta(ev.hora) + '. ¿Nos cuentas si podrás venir?' + limite + '\n\n' +
+    'Responde aquí:\n' + linkInvitacion(inv.codigo);
 }
 
 function linkWhatsApp(numero, texto) {

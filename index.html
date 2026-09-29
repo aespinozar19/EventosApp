@@ -127,6 +127,20 @@
 
     .estado { background: #fff; border-radius: 24px; padding: 44px 28px; text-align: center; }
 
+    /* Cuenta regresiva y calendario */
+    .cuenta { margin-top: 28px; }
+    .cuenta .rotulo { margin: 0 0 10px; font-weight: 700; font-size: 14px; color: var(--acento); }
+    .cuenta .cifras { display: flex; justify-content: center; gap: 10px; }
+    .cuenta .cifras div { min-width: 70px; padding: 10px 6px; border-radius: 14px; background: var(--fondo); }
+    .cuenta strong { display: block; font-family: var(--display); font-weight: var(--peso); font-size: 30px; line-height: 1.1; }
+    .cuenta span { font-size: 13px; opacity: .8; }
+    .cuenta .hoy { margin: 0; font-family: var(--display); font-weight: var(--peso); font-size: 24px; color: var(--acento); }
+    .calendario {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 22px; padding: 10px 16px;
+      border: 2px solid var(--suave); border-radius: 12px;
+      color: var(--tinta); font-weight: 700; font-size: 15px; text-decoration: none;
+    }
+
     /* Portada (cuando se abre la página sin código de invitación) */
     .portada { background: #fff; border-radius: 24px; padding: 40px 28px 32px; text-align: center; }
     .portada .marca { margin: 0 0 22px; font-weight: 800; font-size: 20px; letter-spacing: -.01em; }
@@ -204,6 +218,7 @@
 
   function pintar() {
     raiz.innerHTML = frente() + '<div class="corte" aria-hidden="true"></div><section class="talon" id="talon"></section>';
+    iniciarCuenta();
     pintarTalon();
   }
 
@@ -225,7 +240,38 @@
           ${ev.fechaLimite ? `<div class="dato"><span aria-hidden="true">⏳</span>
             <div>Confirma hasta el ${fechaLarga(ev.fechaLimite)}</div></div>` : ''}
         </div>
+        <div class="cuenta" id="cuenta" aria-live="off"></div>
+        ${D.invitado.estado !== 'No asistirá'
+          ? `<a class="calendario" target="_blank" rel="noopener"
+               href="${esc(enlaceGoogleCalendar(ev, 'Tu invitación: ' + location.href))}">📅 Agregar a mi calendario</a>`
+          : ''}
       </section>`;
+  }
+
+  // Cuenta regresiva hasta la fecha y hora del evento (hora de Lima)
+  let relojCuenta = null;
+  function iniciarCuenta() {
+    const ev = D.evento;
+    const inicio = new Date(`${ev.fecha}T${String(ev.hora || '00:00').slice(0, 5)}:00-05:00`).getTime();
+    const hoyLima = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date());
+
+    const pintar = () => {
+      const el = document.getElementById('cuenta');
+      if (!el) return;
+      const falta = inicio - Date.now();
+      if (falta <= 0) {
+        el.innerHTML = hoyLima() === ev.fecha ? '<p class="hoy">¡Es hoy! 🎉</p>' : '';
+        clearInterval(relojCuenta);
+        return;
+      }
+      const min = Math.floor(falta / 60000);
+      const partes = [[Math.floor(min / 1440), 'días', 'día'], [Math.floor(min / 60) % 24, 'horas', 'hora'], [min % 60, 'minutos', 'minuto']];
+      el.innerHTML = '<p class="rotulo">Faltan</p><div class="cifras">' +
+        partes.map(([n, pl, si]) => `<div><strong>${n}</strong><span>${n === 1 ? si : pl}</span></div>`).join('') + '</div>';
+    };
+    pintar();
+    clearInterval(relojCuenta);
+    relojCuenta = setInterval(pintar, 30000);
   }
 
   function pintarTalon(recien = false) {

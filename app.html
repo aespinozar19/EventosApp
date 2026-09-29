@@ -908,6 +908,8 @@
         <span class="evento-tipo">${t.emoji} ${esc(t.nombre)}${ev.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
         <h1>${esc(ev.titulo)}</h1>
         <p class="evento-meta">${cap(fechaLarga(ev.fecha))} a las ${horaCorta(ev.hora)}, ${esc(ev.lugar)}.</p>
+        <a class="btn chico" target="_blank" rel="noopener"
+           href="${esc(enlaceGoogleCalendar(ev, 'Panel del evento: ' + new URL('#/evento/' + ev.id, location.href).href))}">📅 Agregar a Google Calendar</a>
         ${rol}
       </div>
       <nav class="pestanas" aria-label="Secciones del evento">
@@ -1040,7 +1042,14 @@
       else estado = '<span class="chip neutro">Sin enviar</span>';
 
       let acciones = '';
-      if (puede('enviar')) {
+      const sinResponder = i.enviado && i.estado === 'Pendiente';
+      if (puede('enviar') && sinResponder) {
+        // Ya se le envió y no responde: la acción principal es recordarle
+        const wa = linkWhatsApp(i.whatsapp, armarRecordatorio(ev, i));
+        acciones += (wa ? `<a class="btn chico wa" data-accion="recordar" href="${esc(wa)}" target="_blank" rel="noopener">Recordar por WhatsApp</a>` : '') +
+          '<button class="btn chico" data-accion="copiar-recordatorio">Copiar recordatorio</button>' +
+          '<button class="btn chico hecho" data-accion="enviado" aria-pressed="true">Enviado ✓</button>';
+      } else if (puede('enviar')) {
         const wa = linkWhatsApp(i.whatsapp, armarMensaje(ev, i));
         acciones += (wa ? `<a class="btn chico wa" href="${esc(wa)}" target="_blank" rel="noopener">Enviar por WhatsApp</a>` : '') +
           '<button class="btn chico" data-accion="copiar">Copiar mensaje</button>' +
@@ -1060,6 +1069,7 @@
             <strong>${esc(i.nombre)}</strong>
             <span class="item-sub">${i.whatsapp ? esc(formatoTel(i.whatsapp)) : 'Sin WhatsApp'}, hasta ${i.maxPersonas} ${i.maxPersonas === 1 ? 'persona' : 'personas'}</span>
             ${i.regaloNombre ? `<span class="item-sub">Regalo: ${esc(i.regaloNombre)}</span>` : ''}
+            ${sinResponder && i.recordatorios ? `<span class="item-sub">Recordado ${i.recordatorios === 1 ? '1 vez' : i.recordatorios + ' veces'}, el último el ${esc(i.ultimoRecordatorio)}</span>` : ''}
           </div>
           <div>${estado}</div>
           ${acciones ? `<div class="item-acciones">${acciones}</div>` : ''}
@@ -1165,6 +1175,17 @@
           case 'copiar':
             await copiar(armarMensaje(ev, inv));
             aviso('Mensaje copiado. Pégalo en WhatsApp, Messenger o Instagram.');
+            break;
+          case 'copiar-recordatorio':
+            await copiar(armarRecordatorio(ev, inv));
+            await llamar('marcarRecordado', { eventoId: ev.id, id: inv.id }).then(r => Object.assign(inv, r));
+            pintarLista();
+            aviso('Recordatorio copiado. Pégalo en WhatsApp, Messenger o Instagram.');
+            break;
+          case 'recordar':
+            // El enlace abre WhatsApp; aquí solo se registra el recordatorio
+            Object.assign(inv, await llamar('marcarRecordado', { eventoId: ev.id, id: inv.id }));
+            pintarLista();
             break;
           case 'link':
             await copiar(linkInvitacion(inv.codigo));
