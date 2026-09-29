@@ -1,0 +1,18 @@
+name: Supabase keep-alive
+
+# Evita que el proyecto gratuito de Supabase se pause por inactividad (7 días)
+on:
+  schedule:
+    - cron: '0 12 */3 * *'   # cada 3 días, 7:00 a. m. hora de Lima
+  workflow_dispatch:          # permite ejecutarlo manualmente desde la pestaña Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping a Supabase
+        run: |
+          curl -fsS -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/ping" \
+            -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
