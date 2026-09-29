@@ -120,8 +120,13 @@
     .volver { display: inline-block; color: var(--suave); font-weight: 600; font-size: 14.5px; margin-bottom: 18px; }
     .cabecera-evento { border-left: 6px solid var(--tono); padding-left: 18px; }
     .cabecera-evento .evento-meta { margin-top: 8px; font-size: 15.5px; }
-    .pestanas { display: flex; gap: 6px; margin: 26px 0 24px; border-bottom: 1.5px solid var(--linea); overflow-x: auto; }
-    .pestanas a { padding: 10px 14px; text-decoration: none; font-weight: 600; color: var(--suave); border-bottom: 3px solid transparent; margin-bottom: -1.5px; white-space: nowrap; }
+    .pestanas {
+      display: flex; gap: 6px; margin: 26px 0 24px;
+      box-shadow: inset 0 -1.5px 0 var(--linea);          /* línea inferior, sin causar desborde */
+      overflow-x: auto; overflow-y: hidden; scrollbar-width: none;   /* desliza en celular, sin barra visible */
+    }
+    .pestanas::-webkit-scrollbar { display: none; }
+    .pestanas a { padding: 10px 14px; text-decoration: none; font-weight: 600; color: var(--suave); border-bottom: 3px solid transparent; white-space: nowrap; }
     .pestanas a[aria-current="page"] { color: var(--tinta); border-bottom-color: var(--tinta); }
 
     /* Resumen */
