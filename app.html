@@ -126,6 +126,8 @@
       overflow-x: auto; overflow-y: hidden; scrollbar-width: none;   /* desliza en celular, sin barra visible */
     }
     .pestanas::-webkit-scrollbar { display: none; }
+    .paginacion { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 16px; font-size: 14.5px; color: var(--suave); }
+    .paginacion:empty { display: none; }
     .chip-demo { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--espera-suave); color: var(--espera); font-size: 12.5px; font-weight: 700; }
     .aviso-demo { margin: 0 0 22px; padding: 14px 18px; border-radius: 12px; background: var(--espera-suave); color: var(--tinta); font-size: 15px; line-height: 1.5; }
     .aviso-demo a { font-weight: 700; }
@@ -1017,7 +1019,8 @@
 
   function seccionInvitados(cont, ev, lista) {
     const puede = x => ev.permisos.includes(x);
-    const st = { lista, filtro: FILTROS[S.query.get('f')] ? S.query.get('f') : 'todos', q: '', editando: null };
+    const POR_PAGINA = 20;
+    const st = { lista, filtro: FILTROS[S.query.get('f')] ? S.query.get('f') : 'todos', q: '', editando: null, pagina: 1 };
 
     cont.innerHTML = `
       ${puede('editar_invitados') ? `
@@ -1034,8 +1037,8 @@
             <button type="button" class="btn" id="inv-cancelar" hidden>Cancelar</button></div>
         </form>
         <details class="importar">
-          <summary>Importar varios desde Excel</summary>
-          <p class="ayuda">Copia desde Excel o Google Sheets las columnas nombre, WhatsApp y máximo de personas (esta última es opcional) y pégalas aquí. Una persona por fila.</p>
+          <summary>Pegar una lista de invitados</summary>
+          <p class="ayuda">Escribe o pega tu lista: una persona por fila, con nombre, WhatsApp y máximo de personas (este último es opcional), separados por comas. También puedes copiar esas tres columnas desde una hoja de cálculo y pegarlas aquí.</p>
           <textarea id="imp-texto" placeholder="Familia Pérez, 999888777, 4&#10;Tía Rosa, 987654321, 2"></textarea>
           <button class="btn" id="imp-btn" type="button">Importar lista</button>
         </details>
@@ -1045,7 +1048,8 @@
         <input type="search" id="buscar" placeholder="Buscar por nombre o número" aria-label="Buscar invitados">
         <div class="filtros" id="filtros" role="group" aria-label="Filtrar invitados"></div>
       </div>
-      <ul class="lista" id="lista-inv"></ul>`;
+      <ul class="lista" id="lista-inv"></ul>
+      <nav class="paginacion" id="paginacion" aria-label="Páginas de invitados"></nav>`;
 
     const tipos = ev.tiposPermitidos;
 
@@ -1064,7 +1068,7 @@
         acciones += (wa ? `<a class="btn chico wa" data-accion="recordar" href="${esc(wa)}" target="_blank" rel="noopener">Recordar por WhatsApp</a>` : '') +
           '<button class="btn chico" data-accion="copiar-recordatorio">Copiar recordatorio</button>' +
           '<button class="btn chico hecho" data-accion="enviado" aria-pressed="true">Enviado ✓</button>';
-      } else if (puede('enviar')) {
+      } else if (puede('enviar') && i.estado === 'Pendiente') {
         const wa = linkWhatsApp(i.whatsapp, armarMensaje(ev, i));
         acciones += (wa ? `<a class="btn chico wa" href="${esc(wa)}" target="_blank" rel="noopener">Enviar por WhatsApp</a>` : '') +
           '<button class="btn chico" data-accion="copiar">Copiar mensaje</button>' +
@@ -1100,10 +1104,20 @@
       const visibles = st.lista.filter(FILTROS[st.filtro][1])
         .filter(i => !q || i.nombre.toLowerCase().includes(q) || (digitos && i.whatsapp.includes(digitos)));
 
+      const paginas = Math.max(1, Math.ceil(visibles.length / POR_PAGINA));
+      st.pagina = Math.min(Math.max(1, st.pagina), paginas);
+      const desde = (st.pagina - 1) * POR_PAGINA;
+      const pagina = visibles.slice(desde, desde + POR_PAGINA);
+
+      $('#paginacion').innerHTML = paginas > 1 ? `
+        <button class="btn chico" data-pagina="${st.pagina - 1}" ${st.pagina === 1 ? 'disabled' : ''}>← Anterior</button>
+        <span>${desde + 1}–${desde + pagina.length} de ${visibles.length}</span>
+        <button class="btn chico" data-pagina="${st.pagina + 1}" ${st.pagina === paginas ? 'disabled' : ''}>Siguiente →</button>` : '';
+
       $('#lista-inv').innerHTML = visibles.length
-        ? visibles.map(fila).join('')
+        ? pagina.map(fila).join('')
         : `<li><p class="nota" style="margin:0">${st.lista.length ? 'Nadie coincide con este filtro.'
-            : puede('editar_invitados') ? 'Agrega a tu primer invitado arriba, o importa tu lista completa desde Excel.'
+            : puede('editar_invitados') ? 'Agrega a tu primer invitado arriba, o pega tu lista completa.'
             : 'Todavía no hay invitados.'}</p></li>`;
     }
 
@@ -1173,11 +1187,19 @@
       };
     }
 
-    $('#buscar').addEventListener('input', e => { st.q = e.target.value.trim(); pintarLista(); });
+    $('#buscar').addEventListener('input', e => { st.q = e.target.value.trim(); st.pagina = 1; pintarLista(); });
 
     cont.addEventListener('click', async e => {
       const f = e.target.closest('[data-filtro]');
-      if (f) { st.filtro = f.dataset.filtro; pintarLista(); return; }
+      if (f) { st.filtro = f.dataset.filtro; st.pagina = 1; pintarLista(); return; }
+
+      const pag = e.target.closest('[data-pagina]');
+      if (pag) {
+        st.pagina = Number(pag.dataset.pagina);
+        pintarLista();
+        $('#buscar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
 
       const btn = e.target.closest('[data-accion]');
       if (!btn) return;
