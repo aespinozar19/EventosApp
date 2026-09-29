@@ -100,6 +100,9 @@ function traducirError(error) {
     refresh_token_not_found: ['AUTH', 'Tu sesión expiró. Vuelve a iniciar sesión.']
   };
   if (error.code && auth[error.code]) return fallo(...auth[error.code]);
+  if (/error sending .*email/i.test(msg)) {
+    return fallo('CORREO', 'No pudimos enviarte el correo en este momento. Intenta de nuevo en unos minutos.');
+  }
   if (/rate limit|only request this after/i.test(msg)) return fallo('ESPERA', auth.over_email_send_rate_limit[1]);
 
   // Errores de PostgREST / Postgres

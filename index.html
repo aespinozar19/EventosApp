@@ -127,6 +127,8 @@
 
     .estado { background: #fff; border-radius: 24px; padding: 44px 28px; text-align: center; }
 
+    .demo { margin: -20px 0 22px; padding: 8px 12px; border-radius: 10px; background: var(--suave); font-size: 14px; font-weight: 600; }
+
     /* Cuenta regresiva y calendario */
     .cuenta { margin-top: 28px; }
     .cuenta .rotulo { margin: 0 0 10px; font-weight: 700; font-size: 14px; color: var(--acento); }
@@ -226,6 +228,7 @@
     const ev = D.evento, t = tipoEvento(ev.tipo);
     return `
       <section class="frente">
+        ${ev.esDemo ? '<p class="demo">Evento de ejemplo · así verán la invitación tus invitados</p>' : ''}
         <p class="tipo">${t.emoji} ${esc(t.etiqueta)}</p>
         <h1 class="titulo">${esc(ev.titulo)}</h1>
         ${ev.anfitriones ? `<p class="anfitriones">${esc(ev.anfitriones)}</p>` : ''}

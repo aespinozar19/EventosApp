@@ -126,6 +126,9 @@
       overflow-x: auto; overflow-y: hidden; scrollbar-width: none;   /* desliza en celular, sin barra visible */
     }
     .pestanas::-webkit-scrollbar { display: none; }
+    .chip-demo { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--espera-suave); color: var(--espera); font-size: 12.5px; font-weight: 700; }
+    .aviso-demo { margin: 0 0 22px; padding: 14px 18px; border-radius: 12px; background: var(--espera-suave); color: var(--tinta); font-size: 15px; line-height: 1.5; }
+    .aviso-demo a { font-weight: 700; }
     .pestanas a { padding: 10px 14px; text-decoration: none; font-weight: 600; color: var(--suave); border-bottom: 3px solid transparent; white-space: nowrap; }
     .pestanas a[aria-current="page"] { color: var(--tinta); border-bottom-color: var(--tinta); }
 
@@ -758,7 +761,7 @@
 
     const aprobado = r.estado === 'aprobado';
     const cupo = aprobado
-      ? `<p>Usaste ${r.propios.length} de ${r.cuotaEventos} ${r.cuotaEventos === 1 ? 'evento disponible' : 'eventos disponibles'}.</p>`
+      ? `<p>Usaste ${r.eventosUsados ?? r.propios.filter(e => !e.esDemo).length} de ${r.cuotaEventos} ${r.cuotaEventos === 1 ? 'evento disponible' : 'eventos disponibles'}.</p>`
       : '';
     const accion = !aprobado ? ''
       : r.puedeCrear ? '<a class="btn primario" href="#/nuevo">Crear evento</a>'
@@ -790,7 +793,7 @@
       <li><a class="evento" href="#/evento/${esc(e.id)}" style="--tono:${t.tema.acento}">
         <span class="evento-emoji" aria-hidden="true">${t.emoji}</span>
         <span>
-          <span class="evento-tipo">${esc(t.nombre)}${compartido ? ', tu rol: ' + esc(nombreRol(e.rol)) : ''}${e.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
+          <span class="evento-tipo">${e.esDemo ? '<span class="chip-demo">Ejemplo</span> ' : ''}${esc(t.nombre)}${compartido ? ', tu rol: ' + esc(nombreRol(e.rol)) : ''}${e.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
           <span class="evento-titulo">${esc(e.titulo)}</span>
           <span class="evento-meta">${cap(fechaLarga(e.fecha))}, ${esc(e.lugar)}</span>
         </span>
@@ -907,8 +910,15 @@
       rol = `<p class="rol-evento">Tu rol: <strong>${esc(nombreRol(ev.rol))}</strong>. ${esc(ROLES[ev.rol]?.desc || '')}
         <button class="btn-enlace" id="salir-evento">Salir de este evento</button></p>`;
     }
+    const demo = ev.esDemo ? `
+      <div class="aviso-demo">
+        <strong>Este es un evento de ejemplo.</strong> Explora las pestañas, agrega invitados y abre un enlace de invitación
+        para ver lo que reciben tus invitados. Admite hasta 10 invitados y no cuenta para tu cupo.
+        ${ev.permisos.includes('eliminar_evento') ? `Cuando termines, puedes borrarlo en <a href="#/evento/${esc(ev.id)}/ajustes">Ajustes</a>.` : ''}
+      </div>` : '';
     return `
       <a class="volver" href="#/">Volver a tus eventos</a>
+      ${demo}
       <div class="cabecera-evento" style="--tono:${t.tema.acento}">
         <span class="evento-tipo">${t.emoji} ${esc(t.nombre)}${ev.estado === 'cerrado' ? ', confirmaciones cerradas' : ''}</span>
         <h1>${esc(ev.titulo)}</h1>
@@ -1651,7 +1661,7 @@
         ${eventos.length ? `<div class="tabla-scroll"><table class="tabla">
           <thead><tr><th>Evento</th><th>Dueño</th><th>Fecha</th><th>Invitaciones</th><th></th></tr></thead>
           <tbody>${eventos.map(e => `
-            <tr><td>${tipoEvento(e.tipo).emoji} <strong>${esc(e.titulo)}</strong></td>
+            <tr><td>${tipoEvento(e.tipo).emoji} <strong>${esc(e.titulo)}</strong>${e.esDemo ? ' <span class="chip-demo">Ejemplo</span>' : ''}</td>
               <td>${esc(e.ownerEmail)}</td><td>${esc(e.fecha)}</td><td>${e.totalInvitaciones}</td>
               <td><a class="btn chico" href="#/evento/${esc(e.id)}">Abrir</a></td></tr>`).join('')}</tbody>
         </table></div>` : '<p class="nota">Nadie ha creado eventos todavía.</p>'}
