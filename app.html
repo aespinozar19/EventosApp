@@ -128,6 +128,7 @@
     .pestanas::-webkit-scrollbar { display: none; }
     .paginacion { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 16px; font-size: 14.5px; color: var(--suave); }
     .paginacion:empty { display: none; }
+    .paginacion.arriba { margin: 0 0 12px; justify-content: flex-end; }
     .chip-demo { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--espera-suave); color: var(--espera); font-size: 12.5px; font-weight: 700; }
     .aviso-demo { margin: 0 0 22px; padding: 14px 18px; border-radius: 12px; background: var(--espera-suave); color: var(--tinta); font-size: 15px; line-height: 1.5; }
     .aviso-demo a { font-weight: 700; }
@@ -1048,6 +1049,7 @@
         <input type="search" id="buscar" placeholder="Buscar por nombre o número" aria-label="Buscar invitados">
         <div class="filtros" id="filtros" role="group" aria-label="Filtrar invitados"></div>
       </div>
+      <nav class="paginacion arriba" id="paginacion-arriba" aria-label="Páginas de invitados"></nav>
       <ul class="lista" id="lista-inv"></ul>
       <nav class="paginacion" id="paginacion" aria-label="Páginas de invitados"></nav>`;
 
@@ -1109,10 +1111,12 @@
       const desde = (st.pagina - 1) * POR_PAGINA;
       const pagina = visibles.slice(desde, desde + POR_PAGINA);
 
-      $('#paginacion').innerHTML = paginas > 1 ? `
+      const controles = paginas > 1 ? `
         <button class="btn chico" data-pagina="${st.pagina - 1}" ${st.pagina === 1 ? 'disabled' : ''}>← Anterior</button>
         <span>${desde + 1}–${desde + pagina.length} de ${visibles.length}</span>
         <button class="btn chico" data-pagina="${st.pagina + 1}" ${st.pagina === paginas ? 'disabled' : ''}>Siguiente →</button>` : '';
+      $('#paginacion-arriba').innerHTML = controles;
+      $('#paginacion').innerHTML = controles;
 
       $('#lista-inv').innerHTML = visibles.length
         ? pagina.map(fila).join('')
@@ -1197,7 +1201,8 @@
       if (pag) {
         st.pagina = Number(pag.dataset.pagina);
         pintarLista();
-        $('#buscar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Desde los controles de abajo, se sube al inicio de la lista; desde los de arriba, no se mueve
+        if (pag.closest('#paginacion')) $('#paginacion-arriba').scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
 
