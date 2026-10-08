@@ -31,6 +31,23 @@
     body.con-fondo { background-size: cover; background-position: center; background-repeat: no-repeat; background-attachment: fixed; }
     @media (max-width: 700px) { body.con-fondo { background-attachment: scroll; } }
 
+    /* Con imagen de fondo, la tarjeta es translúcida para que la imagen se vea también detrás del contenido */
+    body.con-fondo .frente,
+    body.con-fondo .talon { background: rgba(255, 255, 255, .80); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    body.con-fondo .corte {
+      background: rgba(255, 255, 255, .80); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      -webkit-mask:
+        radial-gradient(circle at 0 50%, #0000 14px, #000 15px) left / 51% 100% no-repeat,
+        radial-gradient(circle at 100% 50%, #0000 14px, #000 15px) right / 51% 100% no-repeat;
+              mask:
+        radial-gradient(circle at 0 50%, #0000 14px, #000 15px) left / 51% 100% no-repeat,
+        radial-gradient(circle at 100% 50%, #0000 14px, #000 15px) right / 51% 100% no-repeat;
+    }
+    body.con-fondo .cuenta .cifras div { background: rgba(255, 255, 255, .65); }
+    body.con-fondo .opcion span,
+    body.con-fondo select,
+    body.con-fondo .calendario { background: rgba(255, 255, 255, .85); }
+
     .frente {
       background: #fff;
       border-radius: 24px 24px 0 0;
