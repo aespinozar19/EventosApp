@@ -202,6 +202,7 @@
   const raiz = document.getElementById('invitacion');
   let D = null;
   const form = { asiste: null, cant: { adultos: 1, ninos: 0, mascotas: 0 }, regaloId: '' };
+  const SIN_REGALO = 'sin-regalo';   // valor de "Aún no decido" (última opción de la lista)
 
   init();
 
@@ -395,8 +396,9 @@
       : 'Aunque no puedas venir, puedes enviar un regalo (opcional)';
     return `<label class="pregunta" for="regalo">${texto}</label>
       <select id="regalo">
-        <option value="">Aún no decido</option>
+        <option value="" disabled hidden ${form.regaloId === '' ? 'selected' : ''}>Elige un regalo</option>
         ${D.regalos.map(r => `<option value="${esc(r.id)}" ${r.id === form.regaloId ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}
+        <option value="${SIN_REGALO}" ${form.regaloId === SIN_REGALO ? 'selected' : ''}>Aún no decido</option>
       </select>`;
   }
 
@@ -424,7 +426,8 @@
 
   async function enviar() {
     const btn = document.getElementById('enviar');
-    const datos = { codigo, asiste: form.asiste, regaloId: form.regaloId, adultos: 0, ninos: 0, mascotas: 0 };
+    const regaloId = form.regaloId === SIN_REGALO ? '' : form.regaloId;
+    const datos = { codigo, asiste: form.asiste, regaloId, adultos: 0, ninos: 0, mascotas: 0 };
     if (form.asiste) D.evento.tiposPermitidos.forEach(t => { datos[t] = form.cant[t]; });
 
     btn.disabled = true;
@@ -435,7 +438,7 @@
       Object.assign(D.invitado, {
         estado: form.asiste ? 'Confirmado' : 'No asistirá',
         adultos: datos.adultos, ninos: datos.ninos, mascotas: datos.mascotas,
-        regalo: (D.regalos.find(r => r.id === form.regaloId) || {}).nombre || ''
+        regalo: (D.regalos.find(r => r.id === regaloId) || {}).nombre || ''
       });
       pintarTalon(true);
       document.getElementById('talon').scrollIntoView({ behavior: 'smooth', block: 'start' });
