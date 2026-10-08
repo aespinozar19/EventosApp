@@ -158,6 +158,19 @@
 
     .demo { margin: -20px 0 22px; padding: 8px 12px; border-radius: 10px; background: var(--suave); font-size: 14px; font-weight: 600; }
 
+    /* Aporte por Yape / Plin */
+    .aporte { margin-top: 14px; padding: 18px; border-radius: 14px; border: 2px dashed var(--acento); text-align: center; }
+    .aporte p { margin: 0; }
+    .aporte-rotulo { font-size: 15px; font-weight: 600; }
+    .aporte-numero { margin: 6px 0 2px !important; font-size: 30px; font-weight: 700; letter-spacing: .04em; }
+    .aporte-titular { font-weight: 600; }
+    .aporte-copiar {
+      margin-top: 14px; min-height: 48px; padding: 0 22px; border: 0; border-radius: 12px;
+      background: var(--acento); color: #fff; font: 700 16px var(--texto); cursor: pointer;
+    }
+    .aporte-nota { margin-top: 12px !important; font-size: 13.5px; opacity: .8; }
+    body.con-fondo .aporte { border-color: rgba(255, 255, 255, .7); background: rgba(0, 0, 0, .2); }
+
     /* Cuenta regresiva y calendario */
     .cuenta { margin-top: 28px; }
     .cuenta .rotulo { margin: 0 0 10px; font-weight: 700; font-size: 14px; color: var(--acento); }
@@ -342,6 +355,7 @@
       <p>${vino ? 'Confirmaste asistencia para ' + esc(detallePersonas(inv, D.evento.tiposPermitidos)) + '.'
                 : 'Registramos que no podrás asistir.'}</p>
       ${inv.regalo ? `<p>Regalo elegido: <strong>${esc(inv.regalo)}</strong></p>` : ''}
+      ${inv.regaloAporte ? cajaAporte({ tipo: 'aporte', ...inv.regaloAporte }) : ''}
       <p class="nota">Si necesitas cambiar tu respuesta, comunícate con ${contacto()}.</p>`;
   }
 
@@ -397,9 +411,23 @@
     return `<label class="pregunta" for="regalo">${texto}</label>
       <select id="regalo">
         <option value="" disabled hidden ${form.regaloId === '' ? 'selected' : ''}>Elige un regalo</option>
-        ${D.regalos.map(r => `<option value="${esc(r.id)}" ${r.id === form.regaloId ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}
+        ${D.regalos.map(r => `<option value="${esc(r.id)}" ${r.id === form.regaloId ? 'selected' : ''}>${r.tipo === 'aporte' ? '💸 ' : ''}${esc(r.nombre)}</option>`).join('')}
         <option value="${SIN_REGALO}" ${form.regaloId === SIN_REGALO ? 'selected' : ''}>Aún no decido</option>
-      </select>`;
+      </select>
+      <div id="aporte-caja">${cajaAporte(D.regalos.find(r => r.id === form.regaloId))}</div>`;
+  }
+
+  // Datos para transferir por Yape / Plin, con botón para copiar el número
+  function cajaAporte(r) {
+    if (!r || r.tipo !== 'aporte') return '';
+    return `
+      <div class="aporte">
+        <p class="aporte-rotulo">Transfiere por ${esc(APPS_APORTE[r.apps] || 'Yape o Plin')} a:</p>
+        <p class="aporte-numero">${esc(formatoCelular(r.numero))}</p>
+        <p class="aporte-titular">${esc(r.titular)}</p>
+        <button type="button" class="aporte-copiar" data-copiar="${esc(r.numero)}">Copiar número</button>
+        <p class="aporte-nota">Verifica que el nombre que te muestra tu app coincida con el titular antes de enviar.</p>
+      </div>`;
   }
 
   raiz.addEventListener('change', e => {
@@ -408,7 +436,10 @@
       pintarTalon();
       document.querySelector('input[name="asiste"]:checked')?.focus();
     }
-    if (e.target.id === 'regalo') form.regaloId = e.target.value;
+    if (e.target.id === 'regalo') {
+      form.regaloId = e.target.value;
+      document.getElementById('aporte-caja').innerHTML = cajaAporte(D.regalos.find(r => r.id === form.regaloId));
+    }
   });
 
   raiz.addEventListener('click', e => {
@@ -421,8 +452,27 @@
       (mismo && !mismo.disabled ? mismo : document.querySelector(`button[data-tipo="${tipo}"]:not(:disabled)`))?.focus();
       return;
     }
+    const copiarBtn = e.target.closest('[data-copiar]');
+    if (copiarBtn) { copiarNumero(copiarBtn); return; }
     if (e.target.closest('#enviar')) enviar();
   });
+
+  async function copiarNumero(btn) {
+    const texto = btn.dataset.copiar;
+    try {
+      await navigator.clipboard.writeText(texto);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = texto;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    btn.textContent = '¡Copiado! ✓';
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { btn.textContent = 'Copiar número'; }, 2500);
+  }
 
   async function enviar() {
     const btn = document.getElementById('enviar');
@@ -438,7 +488,11 @@
       Object.assign(D.invitado, {
         estado: form.asiste ? 'Confirmado' : 'No asistirá',
         adultos: datos.adultos, ninos: datos.ninos, mascotas: datos.mascotas,
-        regalo: (D.regalos.find(r => r.id === regaloId) || {}).nombre || ''
+        regalo: (D.regalos.find(r => r.id === regaloId) || {}).nombre || '',
+        regaloAporte: (() => {
+          const r = D.regalos.find(x => x.id === regaloId);
+          return r && r.tipo === 'aporte' ? { numero: r.numero, titular: r.titular, apps: r.apps } : null;
+        })()
       });
       pintarTalon(true);
       document.getElementById('talon').scrollIntoView({ behavior: 'smooth', block: 'start' });

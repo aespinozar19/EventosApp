@@ -139,6 +139,11 @@
     .asa:hover { background: var(--fondo); color: var(--tinta); }
     .asa:active { cursor: grabbing; }
     .lista-orden > li.arrastrando { opacity: .4; }
+    .tipo-regalo { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; font-weight: 600; }
+    .tipo-regalo label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .tipo-regalo input { width: 18px; height: 18px; accent-color: var(--tinta); }
+    .aporte-campos { margin-top: 14px; }
+    .fila-form.corta.sin-cupo { grid-template-columns: 2fr auto; }
     .chip-demo { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--espera-suave); color: var(--espera); font-size: 12.5px; font-weight: 700; }
     .aviso-demo { margin: 0 0 22px; padding: 14px 18px; border-radius: 12px; background: var(--espera-suave); color: var(--tinta); font-size: 15px; line-height: 1.5; }
     .aviso-demo a { font-weight: 700; }
@@ -956,8 +961,10 @@
 
     const regalos = r.regalos.length
       ? `<ul class="regalos-resumen">${r.regalos.map(g => `
-          <li><div class="fila"><span>${esc(g.nombre)}</span><span class="nota">${g.reservados} de ${g.cupo}</span></div>
-          <div class="progreso ${g.reservados >= g.cupo ? 'lleno' : ''}"><span style="width:${pct(g.reservados, g.cupo)}%"></span></div></li>`).join('')}</ul>`
+          <li>${g.tipo === 'aporte'
+            ? `<div class="fila"><span><span aria-hidden="true">💸</span> ${esc(g.nombre)}</span><span class="nota">${g.reservados} ${g.reservados === 1 ? 'aportará' : 'aportarán'}</span></div>`
+            : `<div class="fila"><span>${esc(g.nombre)}</span><span class="nota">${g.reservados} de ${g.cupo}</span></div>
+          <div class="progreso ${g.reservados >= g.cupo ? 'lleno' : ''}"><span style="width:${pct(g.reservados, g.cupo)}%"></span></div>`}</li>`).join('')}</ul>`
       : `<p class="nota">Aún no hay regalos en la lista.${r.evento.permisos.includes('regalos')
           ? ` <a href="#/evento/${esc(r.evento.id)}/regalos">Agregar regalos</a>` : ''}</p>`;
 
@@ -1290,15 +1297,30 @@
       ${edita ? `
       <section class="panel">
         <h2 id="form-reg-titulo">Agregar regalo</h2>
-        <form id="form-reg" class="fila-form corta">
-          <div class="c-nombre"><label class="campo" for="reg-nombre">Regalo</label>
-            <input id="reg-nombre" required maxlength="80" placeholder="Paquete de pañales talla 2"></div>
-          <div><label class="campo" for="reg-cupo">Cuántos</label>
-            <input id="reg-cupo" type="number" min="1" max="100" value="1"></div>
-          <div class="c-btn"><button class="btn primario" id="reg-guardar">Agregar</button>
-            <button type="button" class="btn" id="reg-cancelar" hidden>Cancelar</button></div>
+        <form id="form-reg">
+          <div class="tipo-regalo" role="radiogroup" aria-label="Tipo de regalo">
+            <label><input type="radio" name="reg-tipo" value="objeto" checked> Regalo</label>
+            <label><input type="radio" name="reg-tipo" value="aporte"> Aporte por Yape o Plin</label>
+          </div>
+          <div class="fila-form corta" id="reg-fila">
+            <div class="c-nombre"><label class="campo" for="reg-nombre">Regalo</label>
+              <input id="reg-nombre" required maxlength="80" placeholder="Paquete de pañales talla 2"></div>
+            <div id="reg-cupo-campo"><label class="campo" for="reg-cupo">Cuántos</label>
+              <input id="reg-cupo" type="number" min="1" max="100" value="1"></div>
+            <div class="c-btn"><button class="btn primario" id="reg-guardar">Agregar</button>
+              <button type="button" class="btn" id="reg-cancelar" hidden>Cancelar</button></div>
+          </div>
+          <div class="rejilla aporte-campos" id="reg-aporte" hidden>
+            <div><label class="campo" for="reg-numero">Celular que recibe</label>
+              <input id="reg-numero" inputmode="tel" maxlength="15" placeholder="987 654 321"></div>
+            <div><label class="campo" for="reg-titular">Nombre del titular</label>
+              <input id="reg-titular" maxlength="80" placeholder="Como aparece en Yape o Plin"></div>
+            <div><label class="campo" for="reg-apps">Recibe por</label>
+              <select id="reg-apps"><option value="ambos">Yape y Plin</option><option value="yape">Solo Yape</option><option value="plin">Solo Plin</option></select></div>
+          </div>
         </form>
-        <p class="ayuda">Cada invitado puede elegir un regalo al responder. "Cuántos" indica cuántas personas pueden elegir el mismo; cuando se completa, deja de aparecer en la invitación.</p>
+        <p class="ayuda">Cada invitado puede elegir un regalo al responder. "Cuántos" indica cuántas personas pueden elegir el mismo; cuando se completa, deja de aparecer en la invitación.
+          El aporte por Yape o Plin no tiene límite: el invitado verá el número y podrá copiarlo.</p>
       </section>
       ${st.lista.length > 1 ? '<p class="ayuda" id="reg-orden-ayuda" style="margin-top:20px">Arrastra los regalos desde <span aria-hidden="true">⠿</span> para cambiar el orden en que aparecen en la invitación.</p>' : ''}` : ''}
       <ul class="lista ${edita ? 'lista-orden' : ''}" id="lista-reg" style="margin-top:${edita && st.lista.length > 1 ? '10' : '20'}px"></ul>`;
@@ -1309,9 +1331,13 @@
           ${edita ? `<button type="button" class="asa" aria-label="Mover ${esc(r.nombre)}. Usa las flechas arriba y abajo"
             title="Arrastra para reordenar">⠿</button>` : ''}
           <div class="item-info">
+            ${r.tipo === 'aporte' ? `
+            <strong><span aria-hidden="true">💸</span> ${esc(r.nombre)}</strong>
+            <span class="item-sub">${esc(APPS_APORTE[r.aporteApps] || '')} · ${esc(formatoCelular(r.aporteNumero))} · ${esc(r.aporteTitular)}</span>
+            <span class="item-sub">${r.reservados ? `${r.reservados} ${r.reservados === 1 ? 'invitado aportará' : 'invitados aportarán'}: ${esc(listaNatural(r.reservadoPor))}` : 'Aún nadie lo eligió'}</span>` : `
             <strong>${esc(r.nombre)}</strong>
             <span class="item-sub">${r.reservados} de ${r.cupo} reservados${r.reservadoPor.length ? ': ' + esc(listaNatural(r.reservadoPor)) : ''}</span>
-            <div class="progreso ${r.reservados >= r.cupo ? 'lleno' : ''}" style="max-width:320px;margin:8px 0 0"><span style="width:${pct(r.reservados, r.cupo)}%"></span></div>
+            <div class="progreso ${r.reservados >= r.cupo ? 'lleno' : ''}" style="max-width:320px;margin:8px 0 0"><span style="width:${pct(r.reservados, r.cupo)}%"></span></div>`}
           </div>
           ${edita ? `<div class="item-acciones" style="grid-column:auto">
             <button class="btn chico" data-accion="editar">Editar</button>
@@ -1361,10 +1387,24 @@
       });
     }
 
+    const tipoElegido = () => document.querySelector('input[name="reg-tipo"]:checked')?.value || 'objeto';
+    function mostrarTipo() {
+      const aporte = tipoElegido() === 'aporte';
+      $('#reg-aporte').hidden = !aporte;
+      $('#reg-cupo-campo').hidden = aporte;
+      $('#reg-fila').classList.toggle('sin-cupo', aporte);
+      $('#reg-numero').required = aporte;
+      $('#reg-titular').required = aporte;
+      $('#reg-nombre').placeholder = aporte ? 'Aporte para el bebé' : 'Paquete de pañales talla 2';
+      if (aporte && !$('#reg-nombre').value) $('#reg-nombre').value = 'Aporte por Yape o Plin';
+    }
+
     if (edita) {
+      document.querySelectorAll('input[name="reg-tipo"]').forEach(x => x.addEventListener('change', mostrarTipo));
       const limpiarForm = () => {
         st.editando = null;
         $('#form-reg').reset();
+        mostrarTipo();
         $('#form-reg-titulo').textContent = 'Agregar regalo';
         $('#reg-guardar').textContent = 'Agregar';
         $('#reg-cancelar').hidden = true;
@@ -1376,7 +1416,8 @@
         conBoton($('#reg-guardar'), 'Guardando…', async () => {
           try {
             const r = await llamar('guardarRegalo', {
-              eventoId: ev.id, id: editando?.id, nombre: $('#reg-nombre').value, cupo: $('#reg-cupo').value
+              eventoId: ev.id, id: editando?.id, tipo: tipoElegido(), nombre: $('#reg-nombre').value, cupo: $('#reg-cupo').value,
+              aporteNumero: $('#reg-numero').value, aporteTitular: $('#reg-titular').value, aporteApps: $('#reg-apps').value
             });
             st.lista = editando ? st.lista.map(x => x.id === r.id ? r : x) : st.lista.concat(r);
             limpiarForm();
@@ -1396,8 +1437,13 @@
 
         if (btn.dataset.accion === 'editar') {
           st.editando = r;
+          document.querySelector(`input[name="reg-tipo"][value="${r.tipo === 'aporte' ? 'aporte' : 'objeto'}"]`).checked = true;
+          mostrarTipo();
           $('#reg-nombre').value = r.nombre;
           $('#reg-cupo').value = r.cupo;
+          $('#reg-numero').value = r.tipo === 'aporte' ? formatoCelular(r.aporteNumero) : '';
+          $('#reg-titular').value = r.aporteTitular || '';
+          $('#reg-apps').value = r.aporteApps || 'ambos';
           $('#form-reg-titulo').textContent = 'Editar regalo';
           $('#reg-guardar').textContent = 'Guardar cambios';
           $('#reg-cancelar').hidden = false;

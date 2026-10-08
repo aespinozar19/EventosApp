@@ -439,10 +439,21 @@ const ACCIONES = {
   listarRegalos: d => rpc('listar_regalos', { p_evento_id: d.eventoId }),
 
   async guardarRegalo(d) {
+    const aporte = d.tipo === 'aporte';
     const datos = {
+      tipo: aporte ? 'aporte' : 'objeto',
       nombre: vTxt(d.nombre, 80, 'El nombre del regalo', true),
-      cupo: vEntero(d.cupo, 1, 100, 'El cupo')
+      cupo: aporte ? 1 : vEntero(d.cupo, 1, 100, 'El cupo'),
+      aporte_numero: '', aporte_titular: '', aporte_apps: ''
     };
+    if (aporte) {
+      const numero = String(d.aporteNumero || '').replace(/\D/g, '').replace(/^51(?=9\d{8}$)/, '');
+      if (!/^9\d{8}$/.test(numero)) throw fallo('VALIDACION', 'El número para Yape o Plin debe ser un celular de 9 dígitos que empiece con 9.');
+      if (!APPS_APORTE[d.aporteApps]) throw fallo('VALIDACION', 'Elige si recibes por Yape, Plin o ambos.');
+      datos.aporte_numero = numero;
+      datos.aporte_titular = vTxt(d.aporteTitular, 80, 'El nombre del titular', true);
+      datos.aporte_apps = d.aporteApps;
+    }
     let id = d.id;
     if (id) {
       const filas = await consulta(sb.from('regalos').update(datos).eq('id', id).eq('evento_id', d.eventoId).select('id'));
@@ -639,6 +650,14 @@ function urlImagenDirecta(url) {
   const u = String(url || '').trim();
   const m = u.match(/^https:\/\/drive\.google\.com\/(?:file\/d\/([\w-]{10,})|(?:open|uc|thumbnail)\?(?:[^#]*&)?id=([\w-]{10,}))/i);
   return m ? 'https://lh3.googleusercontent.com/d/' + (m[1] || m[2]) : u;
+}
+
+// Aporte por Yape / Plin
+const APPS_APORTE = { yape: 'Yape', plin: 'Plin', ambos: 'Yape o Plin' };
+
+function formatoCelular(n) {
+  const d = String(n || '').replace(/\D/g, '');
+  return d.length === 9 ? d.slice(0, 3) + ' ' + d.slice(3, 6) + ' ' + d.slice(6) : d;
 }
 
 function linkWhatsApp(numero, texto) {
