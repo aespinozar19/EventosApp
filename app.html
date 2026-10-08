@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="format-detection" content="telephone=no">
   <title>Anfitrión: panel de eventos</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -145,7 +146,24 @@
     }
     .mover:hover:not(:disabled) { border-color: var(--tinta); color: var(--tinta); }
     .mover:disabled { opacity: .3; cursor: default; }
+    .lista .item-acciones.acciones-regalo { grid-column: auto; }
     .lista-orden > li.movido { animation: resaltar 1.4s ease-out; }
+
+    /* Regalos en celular: datos a lo ancho y, debajo, los controles en una sola fila */
+    @media (max-width: 600px) {
+      .lista-orden > li:has(.ordenar) {
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas: "asa info info" "mover mover acciones";
+        gap: 6px 12px; padding: 14px 14px 14px 8px;
+      }
+      .lista-orden .ordenar { display: contents; }
+      .lista-orden .asa { grid-area: asa; align-self: start; height: 32px; }
+      .lista-orden .item-info { grid-area: info; min-width: 0; }
+      .lista-orden .mover-extremos { grid-area: mover; flex-direction: row; gap: 6px; align-self: center; }
+      .lista-orden .mover { width: 36px; height: 34px; font-size: 17px; }
+      .lista-orden .item-acciones.acciones-regalo { grid-area: acciones; justify-content: flex-end; }
+      .lista-orden .item-info .progreso { max-width: none !important; }
+    }
     @keyframes resaltar { from { background: var(--espera-suave); } to { background: transparent; } }
     @media (prefers-reduced-motion: reduce) { .lista-orden > li.movido { animation: none; } }
     .asa:active { cursor: grabbing; }
@@ -1365,7 +1383,7 @@
             <span class="item-sub">${r.reservados} de ${r.cupo} reservados${r.reservadoPor.length ? ': ' + esc(listaNatural(r.reservadoPor)) : ''}</span>
             <div class="progreso ${r.reservados >= r.cupo ? 'lleno' : ''}" style="max-width:320px;margin:8px 0 0"><span style="width:${pct(r.reservados, r.cupo)}%"></span></div>`}
           </div>
-          ${edita ? `<div class="item-acciones" style="grid-column:auto">
+          ${edita ? `<div class="item-acciones acciones-regalo">
             <button class="btn chico" data-accion="editar">Editar</button>
             <button class="btn chico peligro" data-accion="eliminar" ${r.reservados ? 'disabled title="Ya tiene reservas"' : ''}>Eliminar</button>
           </div>` : ''}
