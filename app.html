@@ -129,6 +129,7 @@
     .paginacion { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 16px; font-size: 14.5px; color: var(--suave); }
     .paginacion:empty { display: none; }
     .paginacion.arriba { margin: 0 0 12px; justify-content: flex-end; }
+    .fondo-previa { height: 160px; margin-top: 12px; border-radius: 12px; border: 1px solid var(--linea); background: center / cover no-repeat; }
     .chip-demo { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--espera-suave); color: var(--espera); font-size: 12.5px; font-weight: 700; }
     .aviso-demo { margin: 0 0 22px; padding: 14px 18px; border-radius: 12px; background: var(--espera-suave); color: var(--tinta); font-size: 15px; line-height: 1.5; }
     .aviso-demo a { font-weight: 700; }
@@ -1462,7 +1463,7 @@
     const nuevo = !ev;
     const v = ev || {
       tipo: 'babyshower', titulo: '', anfitriones: '', fecha: '', hora: '', lugar: '', direccion: '',
-      linkMaps: '', fechaLimite: '', tiposPermitidos: ['adultos', 'ninos'], maxPersonasDefault: 2,
+      linkMaps: '', imagenFondo: '', fechaLimite: '', tiposPermitidos: ['adultos', 'ninos'], maxPersonasDefault: 2,
       mensajeInvitacion: MENSAJE_DEFAULT, estado: 'activo'
     };
     const campoEv = (id, etiqueta, attrs, clase = '') => `
@@ -1492,6 +1493,15 @@
             ${campoEv('direccion', 'Dirección', 'maxlength="200" placeholder="Av. Primavera 123, Surco"')}
             ${campoEv('linkMaps', 'Enlace de Google Maps', 'type="url" maxlength="500" placeholder="https://maps.app.goo.gl/…"')}
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Imagen de fondo (opcional)</legend>
+          ${campoEv('imagenFondo', 'Enlace de la imagen', 'type="url" maxlength="500" placeholder="https://…/mi-foto.jpg"')}
+          <p class="ayuda">Pega el enlace público de una imagen (debe empezar con https://). Se mostrará detrás de la invitación.
+            Usa una foto horizontal y de buena calidad; si la dejas vacía, se usa el color del tipo de evento.</p>
+          <div class="fondo-previa" id="ev-fondo-previa" hidden></div>
+          <p class="ayuda" id="ev-fondo-estado"></p>
         </fieldset>
 
         <fieldset>
@@ -1532,6 +1542,7 @@
       lugar: $('#ev-lugar').value,
       direccion: $('#ev-direccion').value,
       linkMaps: $('#ev-linkMaps').value,
+      imagenFondo: $('#ev-imagenFondo').value.trim(),
       tiposPermitidos: [...document.querySelectorAll('input[name="tipos"]:checked')].map(x => x.value),
       maxPersonasDefault: $('#ev-max').value,
       mensajeInvitacion: $('#ev-mensaje').value,
@@ -1546,6 +1557,36 @@
     };
     $('#form-ev').addEventListener('input', previa);
     previa();
+
+    // Vista previa de la imagen de fondo: comprueba que el enlace cargue
+    let pruebaFondo = 0;
+    const previaFondo = () => {
+      const url = $('#ev-imagenFondo').value.trim();
+      const caja = $('#ev-fondo-previa'), estado = $('#ev-fondo-estado');
+      const id = ++pruebaFondo;
+      caja.hidden = true;
+      estado.textContent = '';
+      if (!url) return;
+      if (!/^https:\/\/[^\s"'()<>\\]+$/i.test(url)) {
+        estado.textContent = 'El enlace debe empezar con https:// y no tener espacios.';
+        return;
+      }
+      estado.textContent = 'Cargando vista previa…';
+      const img = new Image();
+      img.onload = () => {
+        if (id !== pruebaFondo) return;
+        caja.style.backgroundImage = 'url(' + JSON.stringify(url) + ')';
+        caja.hidden = false;
+        estado.textContent = '';
+      };
+      img.onerror = () => {
+        if (id === pruebaFondo) estado.textContent = 'No pudimos cargar esa imagen. Revisa que el enlace sea público y apunte directo a la imagen.';
+      };
+      img.src = url;
+    };
+    $('#ev-imagenFondo').addEventListener('change', previaFondo);
+    $('#ev-imagenFondo').addEventListener('input', () => { clearTimeout(previaFondo.t); previaFondo.t = setTimeout(previaFondo, 600); });
+    previaFondo();
 
     $('#form-ev').addEventListener('submit', e => {
       e.preventDefault();

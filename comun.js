@@ -3,7 +3,7 @@
 // ⚙️ Configuración (la publishable key es pública: puede ir en el repositorio)
 const APP_CONFIG = {
   SUPABASE_URL: 'https://hpzxgrmwkgltbyhpqmwe.supabase.co',
-  SUPABASE_KEY: 'sb_publishable_Lhdj3_Em0v8zntVJP8mYdw_WTWUioZp',   // Project Settings → API Keys → Publishable key
+  SUPABASE_KEY: 'sb_publishable_PEGA_AQUI_TU_CLAVE',   // Project Settings → API Keys → Publishable key
   GOOGLE_CLIENT_ID: '891168012188-64r5h9me5t7nsoit6n4kvb49u93cj55q.apps.googleusercontent.com'
 };
 
@@ -218,6 +218,10 @@ function datosEvento(d) {
   }
   const linkMaps = vTxt(d.linkMaps, 500, 'El enlace del mapa');
   if (linkMaps && !/^https:\/\//i.test(linkMaps)) throw fallo('VALIDACION', 'El enlace del mapa debe empezar con https://');
+  const imagenFondo = vTxt(d.imagenFondo, 500, 'El enlace de la imagen');
+  if (imagenFondo && !/^https:\/\/[^\s"'()<>\\]+$/i.test(imagenFondo)) {
+    throw fallo('VALIDACION', 'La imagen de fondo debe ser un enlace público que empiece con https://');
+  }
   const pedidos = Array.isArray(d.tiposPermitidos) ? d.tiposPermitidos : [];
 
   return {
@@ -229,6 +233,7 @@ function datosEvento(d) {
     lugar: vTxt(d.lugar, 120, 'El lugar', true),
     direccion: vTxt(d.direccion, 200, 'La dirección'),
     link_maps: linkMaps,
+    imagen_fondo: imagenFondo,
     fecha_limite: fechaLimite || null,
     tipos_permitidos: ['adultos', 'ninos', 'mascotas'].filter(t => t === 'adultos' || pedidos.includes(t)),
     max_personas_default: vEntero(d.maxPersonasDefault, 1, 20, 'El máximo de personas'),

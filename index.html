@@ -28,6 +28,8 @@
       padding: 28px 14px 56px;
     }
     .invitacion { width: 100%; max-width: 500px; }
+    body.con-fondo { background-size: cover; background-position: center; background-repeat: no-repeat; background-attachment: fixed; }
+    @media (max-width: 700px) { body.con-fondo { background-attachment: scroll; } }
 
     .frente {
       background: #fff;
@@ -195,6 +197,17 @@
     s.setProperty('--peso', t.peso);
     cargarFuente(t.gf);
     document.title = D.evento.titulo;
+
+    // Imagen de fondo opcional del evento (si no carga, queda el color del tema)
+    const fondo = D.evento.imagenFondo;
+    if (fondo && /^https:\/\/[^\s"'()<>\\]+$/i.test(fondo)) {
+      const img = new Image();
+      img.onload = () => {
+        document.body.style.backgroundImage = 'url(' + JSON.stringify(fondo) + ')';
+        document.body.classList.add('con-fondo');
+      };
+      img.src = fondo;
+    }
   }
 
   // Página de inicio: sin código de invitación, invita a crear un evento o entrar al panel
