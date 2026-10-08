@@ -3,7 +3,7 @@
 // ⚙️ Configuración (la publishable key es pública: puede ir en el repositorio)
 const APP_CONFIG = {
   SUPABASE_URL: 'https://hpzxgrmwkgltbyhpqmwe.supabase.co',
-  SUPABASE_KEY: 'sb_publishable_PEGA_AQUI_TU_CLAVE',   // Project Settings → API Keys → Publishable key
+  SUPABASE_KEY: 'sb_publishable_Lhdj3_Em0v8zntVJP8mYdw_WTWUioZp',   // Project Settings → API Keys → Publishable key
   GOOGLE_CLIENT_ID: '891168012188-64r5h9me5t7nsoit6n4kvb49u93cj55q.apps.googleusercontent.com'
 };
 
