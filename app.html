@@ -131,12 +131,23 @@
     .paginacion:empty { display: none; }
     .paginacion.arriba { margin: 0 0 12px; justify-content: flex-end; }
     .fondo-previa { height: 160px; margin-top: 12px; border-radius: 12px; border: 1px solid var(--linea); background: center / cover no-repeat; }
-    .lista-orden > li:has(.asa) { grid-template-columns: auto 1fr auto; }
+    .lista-orden > li:has(.ordenar) { grid-template-columns: auto 1fr auto; }
     .asa {
       align-self: center; width: 32px; height: 40px; padding: 0; border: 0; border-radius: 8px;
       background: none; color: var(--suave); font-size: 22px; line-height: 1; cursor: grab; touch-action: none;
     }
     .asa:hover { background: var(--fondo); color: var(--tinta); }
+    .ordenar { display: flex; align-items: center; gap: 2px; align-self: center; }
+    .mover-extremos { display: flex; flex-direction: column; gap: 2px; }
+    .mover {
+      width: 28px; height: 26px; padding: 0; border: 1px solid var(--linea); border-radius: 6px;
+      background: var(--superficie); color: var(--suave); font-size: 15px; line-height: 1; cursor: pointer;
+    }
+    .mover:hover:not(:disabled) { border-color: var(--tinta); color: var(--tinta); }
+    .mover:disabled { opacity: .3; cursor: default; }
+    .lista-orden > li.movido { animation: resaltar 1.4s ease-out; }
+    @keyframes resaltar { from { background: var(--espera-suave); } to { background: transparent; } }
+    @media (prefers-reduced-motion: reduce) { .lista-orden > li.movido { animation: none; } }
     .asa:active { cursor: grabbing; }
     .lista-orden > li.arrastrando { opacity: .4; }
     .tipo-regalo { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; font-weight: 600; }
@@ -1333,10 +1344,18 @@
       <ul class="lista ${edita ? 'lista-orden' : ''}" id="lista-reg" style="margin-top:${edita && st.lista.length > 1 ? '10' : '20'}px"></ul>`;
 
     function pintar() {
-      $('#lista-reg').innerHTML = st.lista.length ? st.lista.map(r => `
+      $('#lista-reg').innerHTML = st.lista.length ? st.lista.map((r, i) => `
         <li data-id="${esc(r.id)}">
-          ${edita ? `<button type="button" class="asa" aria-label="Mover ${esc(r.nombre)}. Usa las flechas arriba y abajo"
-            title="Arrastra para reordenar">⠿</button>` : ''}
+          ${edita ? `<div class="ordenar">
+            <button type="button" class="asa" aria-label="Mover ${esc(r.nombre)}. Usa las flechas arriba y abajo"
+              title="Arrastra para reordenar">⠿</button>
+            <div class="mover-extremos">
+              <button type="button" class="mover" data-accion="al-inicio" title="Mover al inicio" aria-label="Mover ${esc(r.nombre)} al inicio"
+                ${i === 0 ? 'disabled' : ''}>⤒</button>
+              <button type="button" class="mover" data-accion="al-final" title="Mover al final" aria-label="Mover ${esc(r.nombre)} al final"
+                ${i === st.lista.length - 1 ? 'disabled' : ''}>⤓</button>
+            </div>
+          </div>` : ''}
           <div class="item-info">
             ${r.tipo === 'aporte' ? `
             <strong><span aria-hidden="true">💸</span> ${esc(r.nombre)}</strong>
@@ -1450,6 +1469,17 @@
         const r = st.lista.find(x => x.id === btn.closest('li')?.dataset.id);
         if (!r) return;
 
+        if (btn.dataset.accion === 'al-inicio' || btn.dataset.accion === 'al-final') {
+          st.lista = st.lista.filter(x => x !== r);
+          if (btn.dataset.accion === 'al-inicio') st.lista.unshift(r); else st.lista.push(r);
+          pintar();
+          const li = $(`#lista-reg li[data-id="${CSS.escape(r.id)}"]`);
+          li.classList.add('movido');
+          li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          li.querySelector('.asa')?.focus({ preventScroll: true });
+          guardarOrden();
+          return;
+        }
         if (btn.dataset.accion === 'editar') {
           st.editando = r;
           document.querySelector(`input[name="reg-tipo"][value="${r.tipo === 'aporte' ? 'aporte' : 'objeto'}"]`).checked = true;
