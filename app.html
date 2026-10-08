@@ -142,8 +142,14 @@
     .tipo-regalo { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; font-weight: 600; }
     .tipo-regalo label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
     .tipo-regalo input { width: 18px; height: 18px; accent-color: var(--tinta); }
-    .aporte-campos { margin-top: 14px; }
-    .fila-form.corta.sin-cupo { grid-template-columns: 2fr auto; }
+    .form-regalo { display: grid; gap: 16px; }
+    .form-regalo .tipo-regalo { margin: 0; }
+    .form-regalo .ayuda { margin: 0; }
+    .rejilla-regalo { display: grid; grid-template-columns: 1fr 120px; gap: 12px; }
+    .rejilla-regalo:has(#reg-cupo-campo[hidden]) { grid-template-columns: 1fr; }
+    .rejilla-aporte { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 12px; }
+    .acciones-reg { display: flex; gap: 10px; flex-wrap: wrap; }
+    @media (max-width: 720px) { .rejilla-aporte { grid-template-columns: 1fr; } }
     .chip-demo { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--espera-suave); color: var(--espera); font-size: 12.5px; font-weight: 700; }
     .aviso-demo { margin: 0 0 22px; padding: 14px 18px; border-radius: 12px; background: var(--espera-suave); color: var(--tinta); font-size: 15px; line-height: 1.5; }
     .aviso-demo a { font-weight: 700; }
@@ -1297,20 +1303,18 @@
       ${edita ? `
       <section class="panel">
         <h2 id="form-reg-titulo">Agregar regalo</h2>
-        <form id="form-reg">
+        <form id="form-reg" class="form-regalo">
           <div class="tipo-regalo" role="radiogroup" aria-label="Tipo de regalo">
             <label><input type="radio" name="reg-tipo" value="objeto" checked> Regalo</label>
             <label><input type="radio" name="reg-tipo" value="aporte"> Aporte por Yape o Plin</label>
           </div>
-          <div class="fila-form corta" id="reg-fila">
-            <div class="c-nombre"><label class="campo" for="reg-nombre">Regalo</label>
+          <div class="rejilla-regalo">
+            <div><label class="campo" for="reg-nombre" id="reg-nombre-label">Regalo</label>
               <input id="reg-nombre" required maxlength="80" placeholder="Paquete de pañales talla 2"></div>
             <div id="reg-cupo-campo"><label class="campo" for="reg-cupo">Cuántos</label>
               <input id="reg-cupo" type="number" min="1" max="100" value="1"></div>
-            <div class="c-btn"><button class="btn primario" id="reg-guardar">Agregar</button>
-              <button type="button" class="btn" id="reg-cancelar" hidden>Cancelar</button></div>
           </div>
-          <div class="rejilla aporte-campos" id="reg-aporte" hidden>
+          <div class="rejilla-aporte" id="reg-aporte" hidden>
             <div><label class="campo" for="reg-numero">Celular que recibe</label>
               <input id="reg-numero" inputmode="tel" maxlength="15" placeholder="987 654 321"></div>
             <div><label class="campo" for="reg-titular">Nombre del titular</label>
@@ -1318,9 +1322,12 @@
             <div><label class="campo" for="reg-apps">Recibe por</label>
               <select id="reg-apps"><option value="ambos">Yape y Plin</option><option value="yape">Solo Yape</option><option value="plin">Solo Plin</option></select></div>
           </div>
+          <p class="ayuda" id="reg-ayuda"></p>
+          <div class="acciones-reg">
+            <button class="btn primario" id="reg-guardar">Agregar regalo</button>
+            <button type="button" class="btn" id="reg-cancelar" hidden>Cancelar</button>
+          </div>
         </form>
-        <p class="ayuda">Cada invitado puede elegir un regalo al responder. "Cuántos" indica cuántas personas pueden elegir el mismo; cuando se completa, deja de aparecer en la invitación.
-          El aporte por Yape o Plin no tiene límite: el invitado verá el número y podrá copiarlo.</p>
       </section>
       ${st.lista.length > 1 ? '<p class="ayuda" id="reg-orden-ayuda" style="margin-top:20px">Arrastra los regalos desde <span aria-hidden="true">⠿</span> para cambiar el orden en que aparecen en la invitación.</p>' : ''}` : ''}
       <ul class="lista ${edita ? 'lista-orden' : ''}" id="lista-reg" style="margin-top:${edita && st.lista.length > 1 ? '10' : '20'}px"></ul>`;
@@ -1388,26 +1395,34 @@
     }
 
     const tipoElegido = () => document.querySelector('input[name="reg-tipo"]:checked')?.value || 'objeto';
+    const NOMBRE_APORTE = 'Aporte por Yape o Plin';
     function mostrarTipo() {
       const aporte = tipoElegido() === 'aporte';
+      const nombre = $('#reg-nombre');
       $('#reg-aporte').hidden = !aporte;
       $('#reg-cupo-campo').hidden = aporte;
-      $('#reg-fila').classList.toggle('sin-cupo', aporte);
       $('#reg-numero').required = aporte;
       $('#reg-titular').required = aporte;
-      $('#reg-nombre').placeholder = aporte ? 'Aporte para el bebé' : 'Paquete de pañales talla 2';
-      if (aporte && !$('#reg-nombre').value) $('#reg-nombre').value = 'Aporte por Yape o Plin';
+      $('#reg-nombre-label').textContent = aporte ? 'Nombre del aporte' : 'Regalo';
+      nombre.placeholder = aporte ? 'Aporte para el bebé' : 'Paquete de pañales talla 2';
+      // El nombre sugerido para el aporte se pone y se quita solo, sin pisar lo que escribió el usuario
+      if (aporte && !nombre.value.trim()) nombre.value = NOMBRE_APORTE;
+      if (!aporte && nombre.value === NOMBRE_APORTE) nombre.value = '';
+      $('#reg-ayuda').textContent = aporte
+        ? 'Sin límite: todos los invitados pueden elegirlo. Verán el número, el titular y un botón para copiar el número.'
+        : '"Cuántos" indica cuántas personas pueden elegir este regalo; cuando se completa, deja de aparecer en la invitación.';
+      $('#reg-guardar').textContent = st.editando ? 'Guardar cambios' : (aporte ? 'Agregar aporte' : 'Agregar regalo');
     }
 
     if (edita) {
       document.querySelectorAll('input[name="reg-tipo"]').forEach(x => x.addEventListener('change', mostrarTipo));
+      mostrarTipo();
       const limpiarForm = () => {
         st.editando = null;
         $('#form-reg').reset();
-        mostrarTipo();
         $('#form-reg-titulo').textContent = 'Agregar regalo';
-        $('#reg-guardar').textContent = 'Agregar';
         $('#reg-cancelar').hidden = true;
+        mostrarTipo();
       };
 
       $('#form-reg').addEventListener('submit', e => {
@@ -1438,15 +1453,15 @@
         if (btn.dataset.accion === 'editar') {
           st.editando = r;
           document.querySelector(`input[name="reg-tipo"][value="${r.tipo === 'aporte' ? 'aporte' : 'objeto'}"]`).checked = true;
-          mostrarTipo();
           $('#reg-nombre').value = r.nombre;
+          mostrarTipo();
           $('#reg-cupo').value = r.cupo;
           $('#reg-numero').value = r.tipo === 'aporte' ? formatoCelular(r.aporteNumero) : '';
           $('#reg-titular').value = r.aporteTitular || '';
           $('#reg-apps').value = r.aporteApps || 'ambos';
-          $('#form-reg-titulo').textContent = 'Editar regalo';
-          $('#reg-guardar').textContent = 'Guardar cambios';
+          $('#form-reg-titulo').textContent = r.tipo === 'aporte' ? 'Editar aporte' : 'Editar regalo';
           $('#reg-cancelar').hidden = false;
+          $('#form-reg').scrollIntoView({ behavior: 'smooth', block: 'center' });
           $('#reg-nombre').focus();
         }
         if (btn.dataset.accion === 'eliminar') {
