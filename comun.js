@@ -453,6 +453,8 @@ const ACCIONES = {
     return regaloSalida(d.eventoId, id);
   },
 
+  ordenarRegalos: d => rpc('ordenar_regalos', { p_evento_id: d.eventoId, p_ids: d.ids }),
+
   async eliminarRegalo(d) {
     const filas = await consulta(sb.from('regalos').delete().eq('id', d.id).eq('evento_id', d.eventoId).select('id'));
     if (!filas.length) throw fallo('NO_EXISTE', 'Ese regalo ya no existe.');

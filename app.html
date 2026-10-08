@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15/Sortable.min.js"></script>
   <script src="comun.js"></script>
 
   <style>
@@ -130,6 +131,14 @@
     .paginacion:empty { display: none; }
     .paginacion.arriba { margin: 0 0 12px; justify-content: flex-end; }
     .fondo-previa { height: 160px; margin-top: 12px; border-radius: 12px; border: 1px solid var(--linea); background: center / cover no-repeat; }
+    .lista-orden > li:has(.asa) { grid-template-columns: auto 1fr auto; }
+    .asa {
+      align-self: center; width: 32px; height: 40px; padding: 0; border: 0; border-radius: 8px;
+      background: none; color: var(--suave); font-size: 22px; line-height: 1; cursor: grab; touch-action: none;
+    }
+    .asa:hover { background: var(--fondo); color: var(--tinta); }
+    .asa:active { cursor: grabbing; }
+    .lista-orden > li.arrastrando { opacity: .4; }
     .chip-demo { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--espera-suave); color: var(--espera); font-size: 12.5px; font-weight: 700; }
     .aviso-demo { margin: 0 0 22px; padding: 14px 18px; border-radius: 12px; background: var(--espera-suave); color: var(--tinta); font-size: 15px; line-height: 1.5; }
     .aviso-demo a { font-weight: 700; }
@@ -1290,12 +1299,15 @@
             <button type="button" class="btn" id="reg-cancelar" hidden>Cancelar</button></div>
         </form>
         <p class="ayuda">Cada invitado puede elegir un regalo al responder. "Cuántos" indica cuántas personas pueden elegir el mismo; cuando se completa, deja de aparecer en la invitación.</p>
-      </section>` : ''}
-      <ul class="lista" id="lista-reg" style="margin-top:20px"></ul>`;
+      </section>
+      ${st.lista.length > 1 ? '<p class="ayuda" id="reg-orden-ayuda" style="margin-top:20px">Arrastra los regalos desde <span aria-hidden="true">⠿</span> para cambiar el orden en que aparecen en la invitación.</p>' : ''}` : ''}
+      <ul class="lista ${edita ? 'lista-orden' : ''}" id="lista-reg" style="margin-top:${edita && st.lista.length > 1 ? '10' : '20'}px"></ul>`;
 
     function pintar() {
       $('#lista-reg').innerHTML = st.lista.length ? st.lista.map(r => `
         <li data-id="${esc(r.id)}">
+          ${edita ? `<button type="button" class="asa" aria-label="Mover ${esc(r.nombre)}. Usa las flechas arriba y abajo"
+            title="Arrastra para reordenar">⠿</button>` : ''}
           <div class="item-info">
             <strong>${esc(r.nombre)}</strong>
             <span class="item-sub">${r.reservados} de ${r.cupo} reservados${r.reservadoPor.length ? ': ' + esc(listaNatural(r.reservadoPor)) : ''}</span>
@@ -1307,6 +1319,46 @@
           </div>` : ''}
         </li>`).join('')
         : `<li><p class="nota" style="margin:0">${edita ? 'Todavía no hay regalos. Agrega los que te gustaría recibir.' : 'Todavía no hay regalos en la lista.'}</p></li>`;
+    }
+
+    // Guarda el orden actual de la lista (tras arrastrar o mover con el teclado)
+    let guardarOrdenT = null;
+    function guardarOrden() {
+      clearTimeout(guardarOrdenT);
+      guardarOrdenT = setTimeout(async () => {
+        try {
+          await llamar('ordenarRegalos', { eventoId: ev.id, ids: st.lista.map(r => r.id) });
+          aviso('Orden guardado.');
+        } catch (err) { avisoError(err); }
+      }, 400);
+    }
+
+    function activarOrden() {
+      if (!edita) return;
+      if (window.Sortable) {
+        Sortable.create($('#lista-reg'), {
+          handle: '.asa', animation: 150, ghostClass: 'arrastrando',
+          onEnd: e => {
+            if (e.oldIndex === e.newIndex) return;
+            const [movido] = st.lista.splice(e.oldIndex, 1);
+            st.lista.splice(e.newIndex, 0, movido);
+            guardarOrden();
+          }
+        });
+      }
+      // Alternativa con teclado: flechas sobre el asa
+      $('#lista-reg').addEventListener('keydown', e => {
+        const asa = e.target.closest('.asa');
+        if (!asa || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+        e.preventDefault();
+        const i = st.lista.findIndex(r => r.id === asa.closest('li').dataset.id);
+        const j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+        if (j < 0 || j >= st.lista.length) return;
+        [st.lista[i], st.lista[j]] = [st.lista[j], st.lista[i]];
+        pintar();
+        $(`#lista-reg li[data-id="${CSS.escape(st.lista[j].id)}"] .asa`).focus();
+        guardarOrden();
+      });
     }
 
     if (edita) {
@@ -1364,6 +1416,7 @@
     }
 
     pintar();
+    activarOrden();
   }
 
 
