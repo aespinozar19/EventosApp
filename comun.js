@@ -218,7 +218,7 @@ function datosEvento(d) {
   }
   const linkMaps = vTxt(d.linkMaps, 500, 'El enlace del mapa');
   if (linkMaps && !/^https:\/\//i.test(linkMaps)) throw fallo('VALIDACION', 'El enlace del mapa debe empezar con https://');
-  const imagenFondo = vTxt(d.imagenFondo, 500, 'El enlace de la imagen');
+  const imagenFondo = urlImagenDirecta(vTxt(d.imagenFondo, 500, 'El enlace de la imagen'));
   if (imagenFondo && !/^https:\/\/[^\s"'()<>\\]+$/i.test(imagenFondo)) {
     throw fallo('VALIDACION', 'La imagen de fondo debe ser un enlace público que empiece con https://');
   }
@@ -629,6 +629,14 @@ function armarRecordatorio(ev, inv) {
     'Te recordamos nuestra invitación a *' + ev.titulo + '* el ' + fechaLarga(ev.fecha) +
     ' a las ' + horaCorta(ev.hora) + '. ¿Nos cuentas si podrás venir?' + limite + '\n\n' +
     'Responde aquí:\n' + linkInvitacion(inv.codigo);
+}
+
+// Convierte enlaces de Google Drive para compartir en un enlace directo a la imagen.
+// Ej.: https://drive.google.com/file/d/ID/view?usp=sharing → https://lh3.googleusercontent.com/d/ID
+function urlImagenDirecta(url) {
+  const u = String(url || '').trim();
+  const m = u.match(/^https:\/\/drive\.google\.com\/(?:file\/d\/([\w-]{10,})|(?:open|uc|thumbnail)\?(?:[^#]*&)?id=([\w-]{10,}))/i);
+  return m ? 'https://lh3.googleusercontent.com/d/' + (m[1] || m[2]) : u;
 }
 
 function linkWhatsApp(numero, texto) {

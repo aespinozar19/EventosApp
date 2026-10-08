@@ -1498,7 +1498,8 @@
         <fieldset>
           <legend>Imagen de fondo (opcional)</legend>
           ${campoEv('imagenFondo', 'Enlace de la imagen', 'type="url" maxlength="500" placeholder="https://…/mi-foto.jpg"')}
-          <p class="ayuda">Pega el enlace público de una imagen (debe empezar con https://). Se mostrará detrás de la invitación.
+          <p class="ayuda">Pega el enlace público de una imagen (debe empezar con https://). Si es de Google Drive, compártela como
+            "Cualquier persona con el enlace" y pega el enlace de compartir: lo convertimos solo. Se mostrará detrás de la invitación.
             Usa una foto horizontal y de buena calidad; si la dejas vacía, se usa el color del tipo de evento.</p>
           <div class="fondo-previa" id="ev-fondo-previa" hidden></div>
           <p class="ayuda" id="ev-fondo-estado"></p>
@@ -1561,7 +1562,9 @@
     // Vista previa de la imagen de fondo: comprueba que el enlace cargue
     let pruebaFondo = 0;
     const previaFondo = () => {
-      const url = $('#ev-imagenFondo').value.trim();
+      const original = $('#ev-imagenFondo').value.trim();
+      const url = urlImagenDirecta(original);
+      if (url !== original) $('#ev-imagenFondo').value = url;   // enlace de Drive convertido a directo
       const caja = $('#ev-fondo-previa'), estado = $('#ev-fondo-estado');
       const id = ++pruebaFondo;
       caja.hidden = true;
